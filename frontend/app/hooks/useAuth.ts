@@ -49,27 +49,84 @@ export const useAuth = () => {
   const router = useRouter();
 
   useEffect(() => {
-    const checkAuth = () => {
+    const checkAuth = async () => {
       try {
+        // Verificar si estamos en el navegador
+        if (typeof window === 'undefined') {
+          setLoading(false);
+          return;
+        }
+
         const storedToken = localStorage.getItem('token');
         const storedUser = localStorage.getItem('user');
 
         if (storedToken && storedUser) {
-          setToken(storedToken);
-          setUser(JSON.parse(storedUser));
+          try {
+            const parsedUser = JSON.parse(storedUser);
+            
+            // Validación básica del usuario
+            if (parsedUser && parsedUser.id && parsedUser.email && parsedUser.roles) {
+              setToken(storedToken);
+              setUser(parsedUser);
+            } else {
+              // Datos inválidos
+              localStorage.removeItem('token');
+              localStorage.removeItem('user');
+              setUser(null);
+              setToken(null);
+              
+              const currentPath = window.location.pathname;
+              if (currentPath !== '/login' && currentPath !== '/') {
+                router.push('/login');
+              }
+            }
+          } catch (parseError) {
+            // Error al parsear JSON
+            console.error('Error parsing user data:', parseError);
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            setUser(null);
+            setToken(null);
+            router.push('/login');
+          }
         } else {
-          // No hay autenticacion, redirigir al login
-          router.push('/login');
+          // No hay autenticacion válida
+          setUser(null);
+          setToken(null);
+          
+          // Solo redirigir si no estamos ya en login y no es la página raíz
+          const currentPath = window.location.pathname;
+          if (currentPath !== '/login' && currentPath !== '/') {
+            router.push('/login');
+          }
         }
       } catch (error) {
         console.error('Error al verificar autenticacion:', error);
-        logout();
+        // En caso de error, limpiar todo
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        setUser(null);
+        setToken(null);
+        router.push('/login');
       } finally {
         setLoading(false);
       }
     };
 
     checkAuth();
+
+    // Escuchar cambios en localStorage para sincronizar entre pestañas
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'token' || e.key === 'user') {
+        checkAuth();
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, [router]);
 
   const logout = () => {
@@ -78,6 +135,13 @@ export const useAuth = () => {
     setUser(null);
     setToken(null);
     router.push('/login');
+  };
+
+  const setUserData = (userData: User, userToken: string) => {
+    setUser(userData);
+    setToken(userToken);
+    localStorage.setItem('token', userToken);
+    localStorage.setItem('user', JSON.stringify(userData));
   };
 
   const hasRole = (role: string): boolean => {
@@ -137,6 +201,7 @@ export const useAuth = () => {
     loading,
     isAuthenticated: !!user && !!token,
     logout,
+    setUserData,
     hasRole,
     isAdmin,
     permissions,

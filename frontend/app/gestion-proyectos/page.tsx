@@ -274,7 +274,7 @@ export default function GestionProyectosPage() {
 
     try {
       const token = localStorage.getItem('token');
-      console.log('� [FRONTEND] Token encontrado:', !!token);
+      console.log(' [FRONTEND] Token encontrado:', !!token);
       
       const payload = {
         ...formProyecto,

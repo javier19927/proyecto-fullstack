@@ -1,20 +1,13 @@
 'use client';
 
-import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
+import { useState } from 'react';
+import { useAuth } from '../hooks/useAuth';
 
 export default function LogoutButton() {
   const [isLoading, setIsLoading] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const router = useRouter();
   const pathname = usePathname();
-
-  useEffect(() => {
-    // Verificar si el usuario esta autenticado
-    const token = localStorage.getItem('token');
-    const user = localStorage.getItem('user');
-    setIsAuthenticated(!!(token && user));
-  }, [pathname]);
+  const { isAuthenticated, logout } = useAuth();
 
   const handleLogout = async () => {
     if (isLoading) return;
@@ -22,15 +15,7 @@ export default function LogoutButton() {
     setIsLoading(true);
     
     try {
-      // Limpiar localStorage
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      
-      // Actualizar estado
-      setIsAuthenticated(false);
-      
-      // Redirigir al login
-      router.push('/login');
+      logout();
     } catch (error) {
       console.error('Error al cerrar sesion:', error);
     } finally {

@@ -238,7 +238,16 @@ export default function ReportesPage() {
 
   const exportarReporte = async (formato: 'pdf' | 'excel' | 'csv') => {
     try {
+      console.log('Iniciando exportación de reporte:', { tipo: tipoReporte, formato, filtros });
+      
       const token = localStorage.getItem('token');
+      if (!token) {
+        alert('No hay token de autenticación. Por favor, inicie sesión nuevamente.');
+        return;
+      }
+
+      console.log('Token encontrado, enviando petición...');
+      
       const response = await fetch(`${API_CONFIG.BASE_URL}/api/reportes/exportar`, {
         method: 'POST',
         headers: {
@@ -252,26 +261,54 @@ export default function ReportesPage() {
         })
       });
 
+      console.log('Respuesta recibida:', response.status, response.statusText);
+      console.log('Headers de respuesta:', Object.fromEntries(response.headers.entries()));
+
       if (response.ok) {
-        if (formato === 'csv') {
-          // Descargar CSV directamente
-          const blob = await response.blob();
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `reporte_${tipoReporte}_${new Date().toISOString().split('T')[0]}.csv`;
-          document.body.appendChild(a);
-          a.click();
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
-        } else {
-          // Para PDF y Excel (en desarrollo)
-          const result = await response.json();
-          alert(result.message);
+        console.log('Respuesta exitosa, procesando blob...');
+        
+        // Verificar el tipo de contenido
+        const contentType = response.headers.get('content-type');
+        console.log('Content-Type:', contentType);
+        
+        // Descargar archivo directamente
+        const blob = await response.blob();
+        console.log('Blob creado:', blob.size, 'bytes');
+        
+        if (blob.size === 0) {
+          alert('El archivo descargado está vacío. Verifique que haya datos para exportar.');
+          return;
         }
+        
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        
+        // Determinar la extensión del archivo según el formato
+        let extension: string = formato;
+        if (formato === 'excel') extension = 'xlsx';
+        
+        a.download = `reporte_${tipoReporte}_${new Date().toISOString().split('T')[0]}.${extension}`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        console.log('Descarga iniciada exitosamente');
+        // Mostrar mensaje de éxito
+        alert(`Reporte en formato ${formato.toUpperCase()} descargado exitosamente`);
       } else {
-        const errorResult = await response.json();
-        alert(errorResult.message || 'Error al exportar reporte');
+        console.error('Error en la respuesta:', response.status, response.statusText);
+        
+        // Intentar leer la respuesta como JSON para obtener el mensaje de error
+        try {
+          const errorResult = await response.json();
+          console.error('Error del servidor:', errorResult);
+          alert(errorResult.message || 'Error al exportar reporte');
+        } catch (jsonError) {
+          console.error('No se pudo parsear la respuesta de error como JSON:', jsonError);
+          alert(`Error del servidor: ${response.status} ${response.statusText}`);
+        }
       }
     } catch (error) {
       console.error('Error al exportar reporte:', error);
@@ -342,26 +379,26 @@ export default function ReportesPage() {
                       <div className="text-xs text-gray-500 mb-1">Por Estado:</div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-500">Borrador:</span>
-                        <span>{estadisticas.objetivos.por_estado.borrador}</span>
+                        <span>{estadisticas.objetivos.por_estado?.borrador || 0}</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-500">Enviado:</span>
-                        <span>{estadisticas.objetivos.por_estado.enviado}</span>
+                        <span>{estadisticas.objetivos.por_estado?.enviado || 0}</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-500">Validado:</span>
-                        <span className="text-green-600">{estadisticas.objetivos.por_estado.validado}</span>
+                        <span className="text-green-600">{estadisticas.objetivos.por_estado?.validado || 0}</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-500">Rechazado:</span>
-                        <span className="text-red-600">{estadisticas.objetivos.por_estado.rechazado}</span>
+                        <span className="text-red-600">{estadisticas.objetivos.por_estado?.rechazado || 0}</span>
                       </div>
                     </div>
                     
                     {/* Alineación PND/ODS */}
                     <div className="border-t pt-2 mt-3">
-                      <div className="text-xs text-gray-500 mb-1">Alineación PND: {Object.keys(estadisticas.objetivos.alineacion_pnd).length}</div>
-                      <div className="text-xs text-gray-500">Alineación ODS: {Object.keys(estadisticas.objetivos.alineacion_ods).length}</div>
+                      <div className="text-xs text-gray-500 mb-1">Alineación PND: {Object.keys(estadisticas.objetivos.alineacion_pnd || {}).length}</div>
+                      <div className="text-xs text-gray-500">Alineación ODS: {Object.keys(estadisticas.objetivos.alineacion_ods || {}).length}</div>
                     </div>
                   </div>
                 </div>
@@ -386,26 +423,26 @@ export default function ReportesPage() {
                       <div className="text-xs text-gray-500 mb-1">Por Estado:</div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-500">Borrador:</span>
-                        <span>{estadisticas.proyectos.por_estado.borrador}</span>
+                        <span>{estadisticas.proyectos.por_estado?.borrador || 0}</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-500">Pendiente:</span>
-                        <span className="text-yellow-600">{estadisticas.proyectos.por_estado.pendiente}</span>
+                        <span className="text-yellow-600">{estadisticas.proyectos.por_estado?.pendiente || 0}</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-500">Aprobado:</span>
-                        <span className="text-green-600">{estadisticas.proyectos.por_estado.aprobado}</span>
+                        <span className="text-green-600">{estadisticas.proyectos.por_estado?.aprobado || 0}</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-500">Rechazado:</span>
-                        <span className="text-red-600">{estadisticas.proyectos.por_estado.rechazado}</span>
+                        <span className="text-red-600">{estadisticas.proyectos.por_estado?.rechazado || 0}</span>
                       </div>
                     </div>
                     
                     {/* Presupuestos */}
                     <div className="border-t pt-2 mt-3">
-                      <div className="text-xs text-gray-500 mb-1">Años Presupuesto: {Object.keys(estadisticas.proyectos.presupuesto_por_ano).length}</div>
-                      <div className="text-xs text-gray-500">Tipos Presupuesto: {Object.keys(estadisticas.proyectos.presupuesto_por_tipo).length}</div>
+                      <div className="text-xs text-gray-500 mb-1">Años Presupuesto: {Object.keys(estadisticas.proyectos.presupuesto_por_ano || {}).length}</div>
+                      <div className="text-xs text-gray-500">Tipos Presupuesto: {Object.keys(estadisticas.proyectos.presupuesto_por_tipo || {}).length}</div>
                     </div>
                   </div>
                 </div>
@@ -535,7 +572,7 @@ export default function ReportesPage() {
                       : 'bg-gray-50 text-gray-700 hover:bg-blue-50 border-gray-200 hover:border-blue-300'
                   }`}
                 >
-                  <div className="text-lg mb-2">� Resumen Presupuestario</div>
+                  <div className="text-lg mb-2">Resumen Presupuestario</div>
                   <div className="text-sm opacity-90">
                     • Total de presupuestos<br/>
                     • Monto aprobado<br/>
@@ -822,7 +859,7 @@ export default function ReportesPage() {
                   onClick={() => exportarReporte('pdf')}
                   className="flex flex-col items-center p-4 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors border-2 border-red-200 hover:border-red-300"
                 >
-                  <div className="text-2xl mb-2">�</div>
+                  <div className="text-2xl mb-2"></div>
                   <div className="font-semibold">Formato PDF</div>
                   <div className="text-sm text-center mt-1">
                     Para informes institucionales formales
@@ -842,7 +879,7 @@ export default function ReportesPage() {
                   onClick={() => exportarReporte('csv')}
                   className="flex flex-col items-center p-4 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors border-2 border-blue-200 hover:border-blue-300"
                 >
-                  <div className="text-2xl mb-2">�</div>
+                  <div className="text-2xl mb-2"></div>
                   <div className="font-semibold">Formato CSV</div>
                   <div className="text-sm text-center mt-1">
                     Para importación en otros sistemas
@@ -882,7 +919,8 @@ export default function ReportesPage() {
                 </button>
               </div>
 
-              {error && (
+              {/* Error handling - Hidden from UI but logged to console */}
+              {/* {error && (
                 <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-4">
                   <div className="flex">
                     <div className="text-red-400">⚠️</div>
@@ -892,7 +930,7 @@ export default function ReportesPage() {
                     </div>
                   </div>
                 </div>
-              )}
+              )} */}
 
               {cargando ? (
                 <div className="text-center py-8">
@@ -1121,10 +1159,10 @@ export default function ReportesPage() {
             <div className="mt-3">
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-xl font-bold text-gray-900">
-                  {tipoReporte === 'objetivos' ? '📄 Detalle de Objetivo Estratégico' : 
-                   tipoReporte === 'proyectos' ? '🏗 Detalle de Proyecto de Inversión' : 
-                   tipoReporte === 'comparativo' ? '� Detalle Comparativo' :
-                   '✅ Detalle de Validación'}
+                  {tipoReporte === 'objetivos' ? ' Detalle de Objetivo Estratégico' : 
+                   tipoReporte === 'proyectos' ? 'Detalle de Proyecto de Inversión' : 
+                   tipoReporte === 'comparativo' ? ' Detalle Comparativo' :
+                   'Detalle de Validación'}
                 </h3>
                 <button
                   onClick={() => setDetalleModal({ visible: false, datos: null })}

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { useAuth } from '../hooks/useAuth';
 
 interface User {
   id: number;
@@ -13,10 +14,15 @@ interface User {
 }
 
 export default function Navigation() {
-  const [user, setUser] = useState<User | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
+  const { user, isAuthenticated, loading, logout } = useAuth();
+
+  // Cerrar menu movil cuando cambie el usuario o la ruta
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [user, pathname]);
 
   // Function to fix encoding issues
   const fixEncoding = (text: string): string => {
@@ -39,18 +45,13 @@ export default function Navigation() {
     return fixedText;
   };
 
-  useEffect(() => {
-    const userData = localStorage.getItem('user');
-    if (userData) {
-      setUser(JSON.parse(userData));
-    }
-  }, []);
+  // Si no está autenticado o está cargando, no mostrar nada
+  if (loading || !isAuthenticated || !user) {
+    return null;
+  }
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    setUser(null);
-    router.push('/login');
+    logout();
   };
 
   const isActive = (path: string) => {
@@ -94,27 +95,25 @@ export default function Navigation() {
     }
   };
 
-  if (!user) return null;
-
   return (
-    <nav className="bg-white/90 backdrop-blur-md shadow-lg border-b border-gray-200/50 sticky top-0 z-50">
+    <nav className="bg-white shadow-lg border-b border-slate-200 sticky top-0 z-50 backdrop-blur-sm bg-white/95">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           {/* Logo y navegacion principal */}
           <div className="flex items-center">
             <Link href="/dashboard" className="flex-shrink-0 group">
               <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform shadow-lg">
+                <div className="w-10 h-10 primary-gradient rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform shadow-lg">
                   <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                   </svg>
                 </div>
                 <div className="hidden sm:block">
-                  <span className="text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                    Planificacion
+                  <span className="text-xl font-bold gradient-text">
+                    Planificación
                   </span>
-                  <div className="text-xs text-gray-500 font-medium">
-                    Estrategica
+                  <div className="text-xs text-slate-500 font-medium">
+                    Estratégica
                   </div>
                 </div>
               </div>
@@ -124,10 +123,10 @@ export default function Navigation() {
             <div className="hidden md:ml-8 md:flex md:space-x-1">
               <Link
                 href="/dashboard"
-                className={`inline-flex items-center px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+                className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
                   isActive('/dashboard')
-                    ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-200'
-                    : 'text-gray-600 hover:text-indigo-600 hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50'
+                    ? 'nav-pill-active shadow-sm'
+                    : 'nav-pill-inactive'
                 }`}
               >
                 <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -139,26 +138,26 @@ export default function Navigation() {
               {hasAccess('configuracion') && (
                 <Link
                   href="/configuracion-institucional"
-                  className={`inline-flex items-center px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+                  className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
                     isActive('/configuracion-institucional')
-                      ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-200'
-                      : 'text-gray-600 hover:text-indigo-600 hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50'
+                      ? 'nav-pill-active shadow-sm'
+                      : 'nav-pill-inactive'
                   }`}
                 >
                   <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                   </svg>
-                  Configuracion
+                  Configuración
                 </Link>
               )}
 
               {hasAccess('objetivos') && (
                 <Link
                   href="/gestion-objetivos"
-                  className={`inline-flex items-center px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+                  className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
                     isActive('/gestion-objetivos')
-                      ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-200'
-                      : 'text-gray-600 hover:text-indigo-600 hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50'
+                      ? 'nav-pill-active shadow-sm'
+                      : 'nav-pill-inactive'
                   }`}
                 >
                   <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -171,10 +170,10 @@ export default function Navigation() {
               {hasAccess('proyectos') && (
                 <Link
                   href="/gestion-proyectos"
-                  className={`inline-flex items-center px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+                  className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
                     isActive('/gestion-proyectos')
-                      ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-200'
-                      : 'text-gray-600 hover:text-indigo-600 hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50'
+                      ? 'nav-pill-active shadow-sm'
+                      : 'nav-pill-inactive'
                   }`}
                 >
                   <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -187,10 +186,10 @@ export default function Navigation() {
               {hasAccess('reportes') && (
                 <Link
                   href="/reportes"
-                  className={`inline-flex items-center px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+                  className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
                     isActive('/reportes')
-                      ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-200'
-                      : 'text-gray-600 hover:text-indigo-600 hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50'
+                      ? 'nav-pill-active shadow-sm'
+                      : 'nav-pill-inactive'
                   }`}
                 >
                   <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -224,7 +223,14 @@ export default function Navigation() {
             <div className="hidden md:flex items-center space-x-3">
               <div className="text-right">
                 <div className="text-sm font-medium text-gray-700">{fixEncoding(user.nombre)}</div>
-                <div className="flex justify-end space-x-1 mt-1">
+                <div className="text-xs text-gray-500 mb-1">
+                  {user.roles.includes('ADMIN') ? 'Administrador del Sistema' 
+                    : user.roles.includes('PLANIF') ? 'Tecnico Planificador' 
+                    : user.roles.includes('REVISOR') ? 'Revisor Institucional'
+                    : user.roles.includes('VALID') ? 'Validador de Proyectos'
+                    : 'Usuario del Sistema'}
+                </div>
+                <div className="flex justify-end space-x-1">
                   {user.roles.map((role, index) => (
                     <span
                       key={index}
@@ -235,15 +241,15 @@ export default function Navigation() {
                           ? 'bg-blue-100 text-blue-700 border border-blue-200'
                           : role === 'REVISOR'
                           ? 'bg-purple-100 text-purple-700 border border-purple-200'
-                          : role === 'VALIDADOR'
+                          : role === 'VALID'
                           ? 'bg-orange-100 text-orange-700 border border-orange-200'
                           : 'bg-gray-100 text-gray-700 border border-gray-200'
                       }`}
                     >
                       {role === 'ADMIN' ? 'Admin' 
-                        : role === 'PLANIF' ? 'Tecnico Planificador' 
+                        : role === 'PLANIF' ? 'Tecnico' 
                         : role === 'REVISOR' ? 'Revisor'
-                        : role === 'VALIDADOR' ? 'Validador'
+                        : role === 'VALID' ? 'Validador'
                         : role}
                     </span>
                   ))}
@@ -379,13 +385,34 @@ export default function Navigation() {
               <div className="px-4">
                 <div className="text-base font-medium text-gray-800">{fixEncoding(user.nombre)}</div>
                 <div className="text-sm text-gray-500">{user.email}</div>
-                <div className="flex flex-wrap gap-1 mt-2">
+                <div className="text-xs text-gray-500 mb-2">
+                  {user.roles.includes('ADMIN') ? 'Administrador del Sistema' 
+                    : user.roles.includes('PLANIF') ? 'Tecnico Planificador' 
+                    : user.roles.includes('REVISOR') ? 'Revisor Institucional'
+                    : user.roles.includes('VALID') ? 'Validador de Proyectos'
+                    : 'Usuario del Sistema'}
+                </div>
+                <div className="flex flex-wrap gap-1">
                   {user.roles.map((role, index) => (
                     <span
                       key={index}
-                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800"
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        role === 'ADMIN' 
+                          ? 'bg-emerald-100 text-emerald-800' 
+                          : role === 'PLANIF'
+                          ? 'bg-blue-100 text-blue-800'
+                          : role === 'REVISOR'
+                          ? 'bg-purple-100 text-purple-800'
+                          : role === 'VALID'
+                          ? 'bg-orange-100 text-orange-800'
+                          : 'bg-gray-100 text-gray-800'
+                      }`}
                     >
-                      {role}
+                      {role === 'ADMIN' ? 'Admin' 
+                        : role === 'PLANIF' ? 'Tecnico' 
+                        : role === 'REVISOR' ? 'Revisor'
+                        : role === 'VALID' ? 'Validador'
+                        : role}
                     </span>
                   ))}
                 </div>

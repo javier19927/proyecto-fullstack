@@ -1,6 +1,6 @@
 // Configuracion centralizada de URLs para la API
 export const API_CONFIG = {
-  BASE_URL: process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000',
+  BASE_URL: process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4001',
   ENDPOINTS: {
     // Autenticacion
     LOGIN: '/api/auth/login',

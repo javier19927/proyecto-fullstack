@@ -6,7 +6,7 @@ export interface BackendConnection {
 }
 
 export async function checkBackendConnection(): Promise<BackendConnection[]> {
-  const ports = [5000]; // Solo verificar el puerto correcto del backend
+  const ports = [4001]; // Solo verificar el puerto correcto del backend
   const results: BackendConnection[] = [];
 
   for (const port of ports) {

@@ -1,14 +1,14 @@
 'use client'
 
 import {
-  ArcElement,
-  BarElement,
-  CategoryScale,
-  Chart as ChartJS,
-  Legend,
-  LinearScale,
-  Title,
-  Tooltip
+    ArcElement,
+    BarElement,
+    CategoryScale,
+    Chart as ChartJS,
+    Legend,
+    LinearScale,
+    Title,
+    Tooltip
 } from 'chart.js'
 import { useEffect, useState } from 'react'
 import { Bar, Doughnut } from 'react-chartjs-2'
@@ -458,7 +458,7 @@ const DashboardStats = () => {
             </svg>
             Informacion Presupuestaria
           </h3>
-          <div className="text-sm text-gray-500">Montos en guaranies</div>
+          <div className="text-sm text-gray-500">Monto en dólares</div>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">

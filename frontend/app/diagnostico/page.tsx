@@ -70,7 +70,7 @@ export default function DiagnosticoPage() {
               <strong>Backend URL:</strong> {API_CONFIG.BASE_URL}
             </div>
             <div>
-              <strong>Frontend URL:</strong> {window.location.origin}
+              <strong>Frontend URL:</strong> {typeof window !== 'undefined' ? window.location.origin : 'N/A'}
             </div>
           </div>
         </div>

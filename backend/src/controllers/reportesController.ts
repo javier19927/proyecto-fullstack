@@ -4,7 +4,9 @@
 // Implementa la matriz de permisos según documentación
 // ================================================================
 
+import * as ExcelJS from 'exceljs';
 import { Request, Response } from 'express';
+import PDFDocument from 'pdfkit';
 import pool from '../database/connection';
 import { PERMISOS, tienePermiso } from '../middleware/rolePermissions';
 import logger from '../utils/logger';
@@ -88,45 +90,103 @@ export class ReportesController {
         const queryObjetivos = `
           SELECT 
             COUNT(*) as total,
-            COUNT(CASE WHEN estado = 'aprobado' THEN 1 END) as aprobados,
-            COUNT(CASE WHEN estado = 'rechazado' THEN 1 END) as rechazados,
-            COUNT(CASE WHEN estado = 'enviado' THEN 1 END) as en_revision
-          FROM objetivos o
-          LEFT JOIN usuarios u ON o.id_responsable = u.id
+            COUNT(CASE WHEN o.estado = 'Borrador' THEN 1 END) as borrador,
+            COUNT(CASE WHEN o.estado = 'Enviado' THEN 1 END) as enviado,
+            COUNT(CASE WHEN o.estado = 'Validado' THEN 1 END) as validado,
+            COUNT(CASE WHEN o.estado = 'Rechazado' THEN 1 END) as rechazado
+          FROM objetivo o
+          LEFT JOIN usuario u ON o.responsable_id = u.id
           WHERE 1=1
-          ${!usuario.roles.includes('ADMIN') && !usuario.roles.includes('PLANIF') && !usuario.roles.includes('AUDITOR') 
-            ? 'AND u.id_institucion = $1' : ''}
+          ${!usuario.roles.includes('ADMIN') && 
+            !usuario.roles.includes('PLANIF') && 
+            !usuario.roles.includes('TECNICO') &&
+            !usuario.roles.includes('AUDITOR') 
+            ? 'AND u.institucion_id = $1' : ''}
         `;
         
-        const parametros = !usuario.roles.includes('ADMIN') && !usuario.roles.includes('PLANIF') && !usuario.roles.includes('AUDITOR') 
-          ? [usuario.id_institucion] : [];
+        const parametros = !usuario.roles.includes('ADMIN') && 
+                           !usuario.roles.includes('PLANIF') && 
+                           !usuario.roles.includes('TECNICO') &&
+                           !usuario.roles.includes('AUDITOR') 
+          ? [usuario.institucion_id] : [];
           
         const resultObjetivos = await pool.query(queryObjetivos, parametros);
-        estadisticas.objetivos = resultObjetivos.rows[0];
+        const objResult = resultObjetivos.rows[0];
+        
+        estadisticas.objetivos = {
+          total: parseInt(objResult.total),
+          por_estado: {
+            borrador: parseInt(objResult.borrador),
+            enviado: parseInt(objResult.enviado),
+            validado: parseInt(objResult.validado),
+            rechazado: parseInt(objResult.rechazado)
+          },
+          por_institucion: {},
+          alineacion_pnd: {},
+          alineacion_ods: {},
+          validados: parseInt(objResult.validado)
+        };
       }
 
       if (reportesDisponibles.proyectos) {
         const queryProyectos = `
           SELECT 
             COUNT(*) as total,
-            COUNT(CASE WHEN estado = 'aprobado' THEN 1 END) as aprobados,
-            COUNT(CASE WHEN estado = 'rechazado' THEN 1 END) as rechazados,
-            COUNT(CASE WHEN estado = 'en_revision' THEN 1 END) as en_revision,
-            COALESCE(SUM(presupuesto_asignado), 0) as presupuesto_total,
-            COALESCE(SUM(presupuesto_ejecutado), 0) as presupuesto_ejecutado
-          FROM proyectos p
-          LEFT JOIN usuarios u ON p.id_responsable = u.id
+            COUNT(CASE WHEN p.estado = 'Borrador' THEN 1 END) as borrador,
+            COUNT(CASE WHEN p.estado = 'Pendiente' THEN 1 END) as pendiente,
+            COUNT(CASE WHEN p.estado = 'Aprobado' THEN 1 END) as aprobado,
+            COUNT(CASE WHEN p.estado = 'Rechazado' THEN 1 END) as rechazado,
+            COALESCE(SUM(p.presupuesto_total), 0) as presupuesto_total,
+            COALESCE(SUM(p.presupuesto_ejecutado), 0) as presupuesto_ejecutado
+          FROM proyecto p
+          LEFT JOIN usuario u ON p.responsable_id = u.id
           WHERE 1=1
-          ${!usuario.roles.includes('ADMIN') && !usuario.roles.includes('PLANIF') && !usuario.roles.includes('AUDITOR') 
-            ? 'AND u.id_institucion = $1' : ''}
+          ${!usuario.roles.includes('ADMIN') && 
+            !usuario.roles.includes('PLANIF') && 
+            !usuario.roles.includes('TECNICO') &&
+            !usuario.roles.includes('AUDITOR') 
+            ? 'AND u.institucion_id = $1' : ''}
         `;
         
-        const parametros = !usuario.roles.includes('ADMIN') && !usuario.roles.includes('PLANIF') && !usuario.roles.includes('AUDITOR') 
-          ? [usuario.id_institucion] : [];
+        const parametros = !usuario.roles.includes('ADMIN') && 
+                           !usuario.roles.includes('PLANIF') && 
+                           !usuario.roles.includes('TECNICO') &&
+                           !usuario.roles.includes('AUDITOR') 
+          ? [usuario.institucion_id] : [];
           
         const resultProyectos = await pool.query(queryProyectos, parametros);
-        estadisticas.proyectos = resultProyectos.rows[0];
+        const projResult = resultProyectos.rows[0];
+        
+        estadisticas.proyectos = {
+          total: parseInt(projResult.total),
+          por_estado: {
+            borrador: parseInt(projResult.borrador),
+            pendiente: parseInt(projResult.pendiente),
+            aprobado: parseInt(projResult.aprobado),
+            rechazado: parseInt(projResult.rechazado)
+          },
+          monto_total_asignado: parseFloat(projResult.presupuesto_total),
+          presupuesto_por_ano: {},
+          presupuesto_por_tipo: {},
+          validados: parseInt(projResult.aprobado)
+        };
       }
+
+      // Agregar estadísticas comparativas básicas
+      estadisticas.comparativo = {
+        cumplimiento_promedio: 0,
+        metas_planificadas: 0,
+        metas_ejecutadas: 0,
+        instituciones_reportando: 0
+      };
+
+      // Agregar estadísticas de validaciones
+      estadisticas.validaciones = {
+        total: (estadisticas.objetivos?.validados || 0) + (estadisticas.proyectos?.validados || 0),
+        objetivos: estadisticas.objetivos?.validados || 0,
+        proyectos: estadisticas.proyectos?.validados || 0,
+        por_revisor: {}
+      };
 
       logger.info('Consulta de reportes realizada', {
         usuario: usuario.id,
@@ -179,8 +239,11 @@ export class ReportesController {
       if (filtros.estado) filtrosValidos.estado = filtros.estado;
       if (filtros.año) filtrosValidos.año = filtros.año;
 
-      // Solo admin, planificadores y auditores pueden filtrar por institución
-      if (filtros.institucion && (usuario.roles.includes('ADMIN') || usuario.roles.includes('PLANIF') || usuario.roles.includes('AUDITOR'))) {
+      // Solo admin, planificadores, técnicos y auditores pueden filtrar por institución
+      if (filtros.institucion && (usuario.roles.includes('ADMIN') || 
+                                   usuario.roles.includes('PLANIF') || 
+                                   usuario.roles.includes('TECNICO') ||
+                                   usuario.roles.includes('AUDITOR'))) {
         filtrosValidos.institucion = filtros.institucion;
       }
 
@@ -216,8 +279,20 @@ export class ReportesController {
       const usuario = (req as any).usuario;
       const { tipo, formato, filtros } = req.body;
 
+      logger.info('Solicitud de exportación recibida', {
+        usuario: usuario.id,
+        roles: usuario.roles,
+        tipo,
+        formato,
+        filtros
+      });
+
       // Verificar permisos
       if (!tienePermiso(usuario.roles, PERMISOS.REPORTES.EXPORTAR_REPORTES)) {
+        logger.warn('Permisos insuficientes para exportar reportes', {
+          usuario: usuario.id,
+          roles: usuario.roles
+        });
         return res.status(403).json({
           success: false,
           message: 'No tiene permisos para exportar reportes'
@@ -241,8 +316,32 @@ export class ReportesController {
 
       // Determinar el nivel de exportación según el rol
       let nivelExportacion = 'limitada';
-      if (usuario.roles.includes('ADMIN') || usuario.roles.includes('PLANIF') || usuario.roles.includes('AUDITOR')) {
+      if (usuario.roles.includes('ADMIN') || 
+          usuario.roles.includes('PLANIF') || 
+          usuario.roles.includes('TECNICO') ||
+          usuario.roles.includes('AUDITOR')) {
         nivelExportacion = 'completa';
+      }
+
+      // Validaciones específicas por rol según la matriz de la imagen
+      if (usuario.roles.includes('VALID')) {
+        // Validador: solo reportes de objetivos con exportación limitada
+        if (tipo !== 'objetivos') {
+          return res.status(403).json({
+            success: false,
+            message: 'Los Validadores solo pueden exportar reportes de objetivos estratégicos'
+          });
+        }
+      }
+
+      if (usuario.roles.includes('REVISOR')) {
+        // Revisor: solo reportes de proyectos con exportación limitada
+        if (tipo !== 'proyectos') {
+          return res.status(403).json({
+            success: false,
+            message: 'Los Revisores solo pueden exportar reportes de proyectos de inversión'
+          });
+        }
       }
 
       logger.info('Solicitud de exportación de reporte', {
@@ -252,19 +351,122 @@ export class ReportesController {
         nivel: nivelExportacion
       });
 
-      // Simular generación de archivo
-      const nombreArchivo = `reporte_${tipo}_${new Date().toISOString().split('T')[0]}.${formato}`;
+      // Obtener datos según el tipo de reporte
+      let datos: any[] = [];
+      
+      logger.info('Obteniendo datos para el reporte', { tipo });
+      
+      if (tipo === 'objetivos') {
+        const query = `
+          SELECT 
+            o.id,
+            o.codigo,
+            o.descripcion,
+            o.estado,
+            o.tipo,
+            o.created_at as fecha_registro,
+            i.nombre as institucion_nombre,
+            CONCAT(u.nombre, ' ', u.apellido) as usuario_creador
+          FROM objetivo o
+          LEFT JOIN plan_institucional pi ON o.plan_institucional_id = pi.id
+          LEFT JOIN institucion i ON pi.institucion_id = i.id
+          LEFT JOIN usuario u ON o.responsable_id = u.id
+          WHERE 1=1
+          ${!usuario.roles.includes('ADMIN') && 
+            !usuario.roles.includes('PLANIF') && 
+            !usuario.roles.includes('TECNICO') &&
+            !usuario.roles.includes('AUDITOR') 
+            ? 'AND u.institucion_id = $1' : ''}
+          ORDER BY o.created_at DESC
+        `;
+        
+        const parametros = !usuario.roles.includes('ADMIN') && 
+                           !usuario.roles.includes('PLANIF') && 
+                           !usuario.roles.includes('TECNICO') &&
+                           !usuario.roles.includes('AUDITOR') 
+          ? [usuario.institucion_id] : [];
+        
+        const result = await pool.query(query, parametros);
+        datos = result.rows;
+        logger.info('Datos de objetivos obtenidos', { cantidad: datos.length });
+      } else if (tipo === 'proyectos') {
+        const query = `
+          SELECT 
+            p.id,
+            p.codigo,
+            p.nombre,
+            p.estado,
+            p.presupuesto_total as monto_total,
+            p.presupuesto_ejecutado,
+            EXTRACT(YEAR FROM p.created_at) as ano_presupuesto,
+            p.tipo as tipo_presupuesto,
+            p.created_at as fecha_registro,
+            i.nombre as institucion_nombre,
+            CONCAT(u.nombre, ' ', u.apellido) as usuario_creador,
+            CONCAT(s.nombre, ' ', s.apellido) as supervisor
+          FROM proyecto p
+          LEFT JOIN institucion i ON p.institucion_id = i.id
+          LEFT JOIN usuario u ON p.responsable_id = u.id
+          LEFT JOIN usuario s ON p.supervisor_id = s.id
+          WHERE 1=1
+          ${!usuario.roles.includes('ADMIN') && 
+            !usuario.roles.includes('PLANIF') && 
+            !usuario.roles.includes('TECNICO') &&
+            !usuario.roles.includes('AUDITOR') 
+            ? 'AND p.institucion_id = $1' : ''}
+          ORDER BY p.created_at DESC
+        `;
+        
+        const parametros = !usuario.roles.includes('ADMIN') && 
+                           !usuario.roles.includes('PLANIF') && 
+                           !usuario.roles.includes('TECNICO') &&
+                           !usuario.roles.includes('AUDITOR') 
+          ? [usuario.institucion_id] : [];
+        
+        const result = await pool.query(query, parametros);
+        datos = result.rows;
+        logger.info('Datos de proyectos obtenidos', { cantidad: datos.length });
+      } else {
+        // Para tipos no soportados directamente (presupuestario, comparativo)
+        datos = [
+          {
+            id: 1,
+            tipo: tipo,
+            mensaje: `Datos de ejemplo para reporte ${tipo}`,
+            fecha_generacion: new Date().toISOString(),
+            total_registros: 0
+          }
+        ];
+      }
 
-      res.json({
-        success: true,
-        data: {
-          mensaje: `Reporte ${tipo} preparado para exportación`,
-          archivo: nombreArchivo,
-          formato,
-          nivel_exportacion: nivelExportacion,
-          disponible_en: 'En desarrollo - próximamente disponible'
-        }
-      });
+      const fechaActual = new Date().toISOString().split('T')[0];
+      const nombreArchivo = `reporte_${tipo}_${fechaActual}`;
+
+      if (formato === 'csv') {
+        // Generar CSV
+        logger.info('Generando archivo CSV', { cantidadDatos: datos.length });
+        const csv = await generarCSV(datos, tipo);
+        logger.info('CSV generado', { tamaño: csv.length });
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename="${nombreArchivo}.csv"`);
+        res.send(csv);
+      } else if (formato === 'excel') {
+        // Generar Excel
+        logger.info('Generando archivo Excel', { cantidadDatos: datos.length });
+        const buffer = await generarExcel(datos, tipo);
+        logger.info('Excel generado', { tamaño: buffer.length });
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="${nombreArchivo}.xlsx"`);
+        res.send(buffer);
+      } else if (formato === 'pdf') {
+        // Generar PDF
+        logger.info('Generando archivo PDF', { cantidadDatos: datos.length });
+        const buffer = await generarPDF(datos, tipo);
+        logger.info('PDF generado', { tamaño: buffer.length });
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${nombreArchivo}.pdf"`);
+        res.send(buffer);
+      }
 
     } catch (error) {
       logger.error('Error al exportar reporte', error as Error);
@@ -296,28 +498,25 @@ export class ReportesController {
       let query = `
         SELECT 
           o.id,
-          o.nombre,
+          o.codigo as nombre,
           o.descripcion,
           o.estado,
-          o.area,
+          o.tipo as area,
           o.prioridad,
-          o.alineacion_pnd,
-          o.alineacion_ods,
-          o.fecha_creacion,
-          o.fecha_modificacion,
+          o.resultado_esperado as alineacion_pnd,
+          o.indicador_cumplimiento as alineacion_ods,
+          o.created_at as fecha_creacion,
+          o.updated_at as fecha_modificacion,
           CONCAT(u.nombre, ' ', u.apellido) as responsable,
-          CONCAT(v.nombre, ' ', v.apellido) as validado_por,
-          o.fecha_validacion,
-          o.comentarios_validacion,
+          NULL as validado_por,
+          NULL as fecha_validacion,
+          NULL as comentarios_validacion,
           i.nombre as institucion,
-          COUNT(m.id) as total_metas,
-          COUNT(ind.id) as total_indicadores
-        FROM objetivos o
-        LEFT JOIN usuarios u ON o.id_responsable = u.id
-        LEFT JOIN usuarios v ON o.validado_por = v.id
-        LEFT JOIN instituciones i ON u.id_institucion = i.id
-        LEFT JOIN metas m ON o.id = m.id_objetivo
-        LEFT JOIN indicadores ind ON m.id = ind.id_meta
+          0 as total_metas,
+          0 as total_indicadores
+        FROM objetivo o
+        LEFT JOIN usuario u ON o.responsable_id = u.id
+        LEFT JOIN institucion i ON u.institucion_id = i.id
         WHERE 1=1
       `;
 
@@ -328,10 +527,13 @@ export class ReportesController {
       if (usuario.roles.includes('VALID')) {
         // Autoridad Validante: solo objetivos enviados para validación
         query += ` AND o.estado IN ('enviado', 'aprobado', 'rechazado')`;
-      } else if (!usuario.roles.includes('ADMIN') && !usuario.roles.includes('PLANIF') && !usuario.roles.includes('AUDITOR')) {
+      } else if (!usuario.roles.includes('ADMIN') && 
+                 !usuario.roles.includes('PLANIF') && 
+                 !usuario.roles.includes('TECNICO') &&
+                 !usuario.roles.includes('AUDITOR')) {
         // Otros roles: solo objetivos de su institución
-        query += ` AND u.id_institucion = $${contadorParametros}`;
-        parametros.push(usuario.id_institucion);
+        query += ` AND u.institucion_id = $${contadorParametros}`;
+        parametros.push(usuario.institucion_id);
         contadorParametros++;
       }
 
@@ -349,20 +551,19 @@ export class ReportesController {
       }
 
       if (filtros.fechaInicio) {
-        query += ` AND o.fecha_creacion >= $${contadorParametros}`;
+        query += ` AND o.created_at >= $${contadorParametros}`;
         parametros.push(filtros.fechaInicio);
         contadorParametros++;
       }
 
       if (filtros.fechaFin) {
-        query += ` AND o.fecha_creacion <= $${contadorParametros}`;
+        query += ` AND o.created_at <= $${contadorParametros}`;
         parametros.push(filtros.fechaFin);
         contadorParametros++;
       }
 
       query += ` 
-        GROUP BY o.id, u.nombre, u.apellido, v.nombre, v.apellido, i.nombre
-        ORDER BY o.fecha_creacion DESC
+        ORDER BY o.created_at DESC
       `;
 
       const result = await pool.query(query, parametros);
@@ -420,22 +621,21 @@ export class ReportesController {
           p.estado,
           p.fecha_inicio,
           p.fecha_fin,
-          p.presupuesto_asignado,
+          p.presupuesto_total as presupuesto_asignado,
           p.presupuesto_ejecutado,
-          ROUND((p.presupuesto_ejecutado::numeric / NULLIF(p.presupuesto_asignado::numeric, 0)) * 100, 2) as porcentaje_presupuesto,
+          ROUND((p.presupuesto_ejecutado::numeric / NULLIF(p.presupuesto_total::numeric, 0)) * 100, 2) as porcentaje_presupuesto,
           p.porcentaje_avance,
           CONCAT(u.nombre, ' ', u.apellido) as responsable,
           CONCAT(v.nombre, ' ', v.apellido) as validado_por,
-          p.fecha_validacion,
-          p.comentarios_validacion,
+          NULL as fecha_validacion,
+          NULL as comentarios_validacion,
           i.nombre as institucion,
-          COUNT(a.id) as total_actividades,
-          COUNT(CASE WHEN a.estado = 'completada' THEN 1 END) as actividades_completadas
-        FROM proyectos p
-        LEFT JOIN usuarios u ON p.id_responsable = u.id
-        LEFT JOIN usuarios v ON p.validado_por = v.id
-        LEFT JOIN instituciones i ON u.id_institucion = i.id
-        LEFT JOIN actividades a ON p.id = a.id_proyecto
+          0 as total_actividades,
+          0 as actividades_completadas
+        FROM proyecto p
+        LEFT JOIN usuario u ON p.responsable_id = u.id
+        LEFT JOIN usuario v ON p.supervisor_id = v.id
+        LEFT JOIN institucion i ON p.institucion_id = i.id
         WHERE 1=1
       `;
 
@@ -446,10 +646,13 @@ export class ReportesController {
       if (usuario.roles.includes('REVISOR')) {
         // Revisor: acceso limitado a proyectos en revisión/validados
         query += ` AND p.estado IN ('en_revision', 'aprobado', 'rechazado')`;
-      } else if (!usuario.roles.includes('ADMIN') && !usuario.roles.includes('PLANIF') && !usuario.roles.includes('AUDITOR')) {
+      } else if (!usuario.roles.includes('ADMIN') && 
+                 !usuario.roles.includes('PLANIF') && 
+                 !usuario.roles.includes('TECNICO') &&
+                 !usuario.roles.includes('AUDITOR')) {
         // Otros roles: solo proyectos de su institución
-        query += ` AND u.id_institucion = $${contadorParametros}`;
-        parametros.push(usuario.id_institucion);
+        query += ` AND p.institucion_id = $${contadorParametros}`;
+        parametros.push(usuario.institucion_id);
         contadorParametros++;
       }
 
@@ -473,8 +676,7 @@ export class ReportesController {
       }
 
       query += ` 
-        GROUP BY p.id, u.nombre, u.apellido, v.nombre, v.apellido, i.nombre
-        ORDER BY p.fecha_creacion DESC
+        ORDER BY p.created_at DESC
       `;
 
       const result = await pool.query(query, parametros);
@@ -528,16 +730,19 @@ export class ReportesController {
       const parametros: any[] = [];
       let contadorParametros = 1;
 
-      // Filtrar por institución si no es admin/planif/auditor
-      if (!usuario.roles.includes('ADMIN') && !usuario.roles.includes('PLANIF') && !usuario.roles.includes('AUDITOR')) {
-        whereClause += ` AND u.id_institucion = $${contadorParametros}`;
-        parametros.push(usuario.id_institucion);
+            // Filtrar por institución si no es admin/planif/tecnico/auditor
+      if (!usuario.roles.includes('ADMIN') && 
+          !usuario.roles.includes('PLANIF') && 
+          !usuario.roles.includes('TECNICO') &&
+          !usuario.roles.includes('AUDITOR')) {
+        whereClause += ` AND p.institucion_id = $${contadorParametros}`;
+        parametros.push(usuario.institucion_id);
         contadorParametros++;
       }
 
       // Aplicar filtros de fecha si se proporcionan
       if (filtros.año) {
-        whereClause += ` AND EXTRACT(YEAR FROM p.fecha_creacion) = $${contadorParametros}`;
+        whereClause += ` AND EXTRACT(YEAR FROM p.created_at) = $${contadorParametros}`;
         parametros.push(parseInt(filtros.año));
         contadorParametros++;
       }
@@ -545,19 +750,18 @@ export class ReportesController {
       const queryResumen = `
         SELECT 
           COUNT(*) as total_proyectos,
-          COALESCE(SUM(p.presupuesto_asignado), 0) as presupuesto_total_asignado,
+          COALESCE(SUM(p.presupuesto_total), 0) as presupuesto_total_asignado,
           COALESCE(SUM(p.presupuesto_ejecutado), 0) as presupuesto_total_ejecutado,
-          COALESCE(SUM(CASE WHEN p.estado = 'aprobado' THEN p.presupuesto_asignado ELSE 0 END), 0) as presupuesto_aprobado,
-          COUNT(CASE WHEN p.estado = 'aprobado' THEN 1 END) as proyectos_aprobados,
-          COUNT(CASE WHEN p.estado = 'en_revision' THEN 1 END) as proyectos_en_revision,
-          COUNT(CASE WHEN p.estado = 'rechazado' THEN 1 END) as proyectos_rechazados,
+          COALESCE(SUM(CASE WHEN p.estado = 'Aprobado' THEN p.presupuesto_total ELSE 0 END), 0) as presupuesto_aprobado,
+          COUNT(CASE WHEN p.estado = 'Aprobado' THEN 1 END) as proyectos_aprobados,
+          COUNT(CASE WHEN p.estado = 'Enviado' THEN 1 END) as proyectos_en_revision,
+          COUNT(CASE WHEN p.estado = 'Rechazado' THEN 1 END) as proyectos_rechazados,
           ROUND(
             COALESCE(SUM(p.presupuesto_ejecutado), 0) * 100.0 / 
-            NULLIF(COALESCE(SUM(p.presupuesto_asignado), 0), 0), 
+            NULLIF(COALESCE(SUM(p.presupuesto_total), 0), 0), 
             2
           ) as porcentaje_ejecucion_global
-        FROM proyectos p
-        LEFT JOIN usuarios u ON p.id_responsable = u.id
+        FROM proyecto p
         ${whereClause}
       `;
 
@@ -565,16 +769,15 @@ export class ReportesController {
         SELECT 
           i.nombre as institucion,
           COUNT(p.id) as proyectos,
-          COALESCE(SUM(p.presupuesto_asignado), 0) as presupuesto_asignado,
+          COALESCE(SUM(p.presupuesto_total), 0) as presupuesto_asignado,
           COALESCE(SUM(p.presupuesto_ejecutado), 0) as presupuesto_ejecutado,
           ROUND(
             COALESCE(SUM(p.presupuesto_ejecutado), 0) * 100.0 / 
-            NULLIF(COALESCE(SUM(p.presupuesto_asignado), 0), 0), 
+            NULLIF(COALESCE(SUM(p.presupuesto_total), 0), 0), 
             2
           ) as porcentaje_ejecucion
-        FROM proyectos p
-        LEFT JOIN usuarios u ON p.id_responsable = u.id
-        LEFT JOIN instituciones i ON u.id_institucion = i.id
+        FROM proyecto p
+        LEFT JOIN institucion i ON p.institucion_id = i.id
         ${whereClause}
         GROUP BY i.id, i.nombre
         ORDER BY presupuesto_asignado DESC
@@ -633,23 +836,25 @@ export class ReportesController {
       // Comparativo de objetivos: planificados vs ejecutados
       const queryObjetivos = `
         SELECT 
-          o.area,
+          o.tipo as area,
           COUNT(o.id) as objetivos_planificados,
-          COUNT(CASE WHEN o.estado = 'aprobado' THEN 1 END) as objetivos_aprobados,
-          COUNT(m.id) as metas_planificadas,
-          COUNT(CASE WHEN m.estado = 'completada' THEN 1 END) as metas_completadas,
+          COUNT(CASE WHEN o.estado = 'Validado' THEN 1 END) as objetivos_aprobados,
+          0 as metas_planificadas,
+          0 as metas_completadas,
           ROUND(
-            COUNT(CASE WHEN o.estado = 'aprobado' THEN 1 END) * 100.0 / 
+            COUNT(CASE WHEN o.estado = 'Validado' THEN 1 END) * 100.0 / 
             NULLIF(COUNT(o.id), 0), 
             2
           ) as porcentaje_objetivos_logrados
-        FROM objetivos o
-        LEFT JOIN metas m ON o.id = m.id_objetivo
-        LEFT JOIN usuarios u ON o.id_responsable = u.id
-        WHERE EXTRACT(YEAR FROM o.fecha_creacion) = $1
-        ${!usuario.roles.includes('ADMIN') && !usuario.roles.includes('PLANIF') && !usuario.roles.includes('AUDITOR') 
-          ? 'AND u.id_institucion = $2' : ''}
-        GROUP BY o.area
+        FROM objetivo o
+        LEFT JOIN usuario u ON o.responsable_id = u.id
+        WHERE EXTRACT(YEAR FROM o.created_at) = $1
+        ${!usuario.roles.includes('ADMIN') && 
+          !usuario.roles.includes('PLANIF') && 
+          !usuario.roles.includes('TECNICO') &&
+          !usuario.roles.includes('AUDITOR') 
+          ? 'AND u.institucion_id = $2' : ''}
+        GROUP BY o.tipo
         ORDER BY objetivos_planificados DESC
       `;
 
@@ -658,26 +863,31 @@ export class ReportesController {
         SELECT 
           i.nombre as institucion,
           COUNT(p.id) as proyectos_planificados,
-          COUNT(CASE WHEN p.estado = 'aprobado' THEN 1 END) as proyectos_aprobados,
-          COALESCE(SUM(p.presupuesto_asignado), 0) as presupuesto_planificado,
+          COUNT(CASE WHEN p.estado = 'Aprobado' THEN 1 END) as proyectos_aprobados,
+          COALESCE(SUM(p.presupuesto_total), 0) as presupuesto_planificado,
           COALESCE(SUM(p.presupuesto_ejecutado), 0) as presupuesto_ejecutado,
           ROUND(
             COALESCE(SUM(p.presupuesto_ejecutado), 0) * 100.0 / 
-            NULLIF(COALESCE(SUM(p.presupuesto_asignado), 0), 0), 
+            NULLIF(COALESCE(SUM(p.presupuesto_total), 0), 0), 
             2
           ) as porcentaje_ejecucion_presupuestal
-        FROM proyectos p
-        LEFT JOIN usuarios u ON p.id_responsable = u.id
-        LEFT JOIN instituciones i ON u.id_institucion = i.id
-        WHERE EXTRACT(YEAR FROM p.fecha_creacion) = $1
-        ${!usuario.roles.includes('ADMIN') && !usuario.roles.includes('PLANIF') && !usuario.roles.includes('AUDITOR') 
-          ? 'AND u.id_institucion = $2' : ''}
+        FROM proyecto p
+        LEFT JOIN institucion i ON p.institucion_id = i.id
+        WHERE EXTRACT(YEAR FROM p.created_at) = $1
+        ${!usuario.roles.includes('ADMIN') && 
+          !usuario.roles.includes('PLANIF') && 
+          !usuario.roles.includes('TECNICO') &&
+          !usuario.roles.includes('AUDITOR') 
+          ? 'AND p.institucion_id = $2' : ''}
         GROUP BY i.id, i.nombre
         ORDER BY presupuesto_planificado DESC
       `;
 
-      const parametros = !usuario.roles.includes('ADMIN') && !usuario.roles.includes('PLANIF') && !usuario.roles.includes('AUDITOR') 
-        ? [año, usuario.id_institucion] : [año];
+      const parametros = !usuario.roles.includes('ADMIN') && 
+                         !usuario.roles.includes('PLANIF') && 
+                         !usuario.roles.includes('TECNICO') &&
+                         !usuario.roles.includes('AUDITOR') 
+        ? [año, usuario.institucion_id] : [año];
 
       const [comparativoObjetivos, comparativoProyectos] = await Promise.all([
         pool.query(queryObjetivos, parametros),
@@ -737,11 +947,11 @@ export class ReportesController {
 
       // Obtener años disponibles
       const queryAños = `
-        SELECT DISTINCT EXTRACT(YEAR FROM fecha_creacion) as año
+        SELECT DISTINCT EXTRACT(YEAR FROM created_at) as año
         FROM (
-          SELECT fecha_creacion FROM objetivos
+          SELECT created_at FROM objetivo
           UNION ALL
-          SELECT fecha_creacion FROM proyectos
+          SELECT created_at FROM proyecto
         ) AS fechas
         ORDER BY año DESC
       `;
@@ -751,10 +961,10 @@ export class ReportesController {
       // Obtener áreas (solo si puede ver objetivos)
       if (tienePermiso(usuario.roles, PERMISOS.REPORTES.GENERAR_REPORTE_OBJETIVOS)) {
         const queryAreas = `
-          SELECT DISTINCT area 
-          FROM objetivos 
-          WHERE area IS NOT NULL AND area != ''
-          ORDER BY area
+          SELECT DISTINCT tipo as area
+          FROM objetivo 
+          WHERE tipo IS NOT NULL AND tipo != ''
+          ORDER BY tipo
         `;
         const resultAreas = await pool.query(queryAreas);
         opciones.areas = resultAreas.rows.map((row: any) => row.area);
@@ -763,25 +973,31 @@ export class ReportesController {
       // Obtener responsables según permisos
       let queryResponsables = `
         SELECT DISTINCT u.id, CONCAT(u.nombre, ' ', u.apellido) as nombre_completo
-        FROM usuarios u
-        WHERE u.activo = true
+        FROM usuario u
+        WHERE u.estado = true
       `;
 
-      if (!usuario.roles.includes('ADMIN') && !usuario.roles.includes('PLANIF') && !usuario.roles.includes('AUDITOR')) {
-        queryResponsables += ` AND u.id_institucion = $1`;
-        const resultResponsables = await pool.query(queryResponsables, [usuario.id_institucion]);
+      if (!usuario.roles.includes('ADMIN') && 
+          !usuario.roles.includes('PLANIF') && 
+          !usuario.roles.includes('TECNICO') &&
+          !usuario.roles.includes('AUDITOR')) {
+        queryResponsables += ` AND u.institucion_id = $1`;
+        const resultResponsables = await pool.query(queryResponsables, [usuario.institucion_id]);
         opciones.responsables = resultResponsables.rows;
       } else {
         const resultResponsables = await pool.query(queryResponsables);
         opciones.responsables = resultResponsables.rows;
       }
 
-      // Obtener instituciones (solo para admin, planificadores y auditores)
-      if (usuario.roles.includes('ADMIN') || usuario.roles.includes('PLANIF') || usuario.roles.includes('AUDITOR')) {
+      // Obtener instituciones (solo para admin, planificadores, técnicos y auditores)
+      if (usuario.roles.includes('ADMIN') || 
+          usuario.roles.includes('PLANIF') || 
+          usuario.roles.includes('TECNICO') ||
+          usuario.roles.includes('AUDITOR')) {
         const queryInstituciones = `
           SELECT id, nombre 
-          FROM instituciones 
-          WHERE activa = true
+          FROM institucion 
+          WHERE estado = true
           ORDER BY nombre
         `;
         const resultInstituciones = await pool.query(queryInstituciones);
@@ -802,3 +1018,174 @@ export class ReportesController {
     }
   }
 }
+
+// ================================================================
+// FUNCIONES AUXILIARES PARA GENERACIÓN DE ARCHIVOS
+// ================================================================
+
+/**
+ * Genera un archivo CSV con los datos proporcionados
+ */
+async function generarCSV(datos: any[], tipo: string): Promise<string> {
+  if (datos.length === 0) {
+    return 'No hay datos disponibles para exportar';
+  }
+
+  // Obtener las columnas del primer registro
+  const columnas = Object.keys(datos[0]);
+  
+  // Crear el encabezado CSV
+  let csv = columnas.join(',') + '\n';
+  
+  // Agregar los datos
+  datos.forEach(fila => {
+    const valores = columnas.map(col => {
+      let valor = fila[col];
+      if (valor === null || valor === undefined) {
+        return '';
+      }
+      // Escapar comillas y envolver en comillas si contiene comas
+      valor = String(valor).replace(/"/g, '""');
+      if (valor.includes(',') || valor.includes('\n') || valor.includes('"')) {
+        valor = `"${valor}"`;
+      }
+      return valor;
+    });
+    csv += valores.join(',') + '\n';
+  });
+  
+  return csv;
+}
+
+/**
+ * Genera un archivo Excel con los datos proporcionados
+ */
+async function generarExcel(datos: any[], tipo: string): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet(`Reporte ${tipo}`);
+  
+  if (datos.length === 0) {
+    worksheet.addRow(['No hay datos disponibles para exportar']);
+    return Buffer.from(await workbook.xlsx.writeBuffer());
+  }
+
+  // Configurar encabezados
+  const columnas = Object.keys(datos[0]);
+  const encabezados = columnas.map(col => ({
+    header: col.replace(/_/g, ' ').toUpperCase(),
+    key: col,
+    width: 20
+  }));
+  
+  worksheet.columns = encabezados;
+  
+  // Estilo para encabezados
+  worksheet.getRow(1).font = { bold: true };
+  worksheet.getRow(1).fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FFE0E0E0' }
+  };
+  
+  // Agregar datos
+  datos.forEach(fila => {
+    worksheet.addRow(fila);
+  });
+  
+  // Aplicar bordes a todas las celdas
+  worksheet.eachRow((row, rowNumber) => {
+    row.eachCell((cell) => {
+      cell.border = {
+        top: { style: 'thin' },
+        left: { style: 'thin' },
+        bottom: { style: 'thin' },
+        right: { style: 'thin' }
+      };
+    });
+  });
+  
+  return Buffer.from(await workbook.xlsx.writeBuffer());
+}
+
+/**
+ * Genera un archivo PDF con los datos proporcionados
+ */
+async function generarPDF(datos: any[], tipo: string): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ margin: 50 });
+    const buffers: Buffer[] = [];
+    
+    doc.on('data', buffers.push.bind(buffers));
+    doc.on('end', () => {
+      const pdfBuffer = Buffer.concat(buffers);
+      resolve(pdfBuffer);
+    });
+    doc.on('error', reject);
+    
+    // Encabezado del documento
+    doc.fontSize(20).text(`Reporte de ${tipo.charAt(0).toUpperCase() + tipo.slice(1)}`, { align: 'center' });
+    doc.fontSize(12).text(`Generado el: ${new Date().toLocaleDateString()}`, { align: 'center' });
+    doc.moveDown(2);
+    
+    if (datos.length === 0) {
+      doc.text('No hay datos disponibles para exportar');
+      doc.end();
+      return;
+    }
+    
+    // Configurar tabla
+    const columnas = Object.keys(datos[0]);
+    const anchoColumna = (doc.page.width - 100) / columnas.length;
+    let posicionY = doc.y;
+    
+    // Encabezados de tabla
+    doc.fontSize(10);
+    columnas.forEach((col, index) => {
+      const x = 50 + (index * anchoColumna);
+      doc.rect(x, posicionY, anchoColumna, 20).stroke();
+      doc.text(col.replace(/_/g, ' ').toUpperCase(), x + 2, posicionY + 5, {
+        width: anchoColumna - 4,
+        height: 15,
+        ellipsis: true
+      });
+    });
+    
+    posicionY += 20;
+    
+    // Datos de tabla
+    datos.forEach((fila, filaIndex) => {
+      // Verificar si necesitamos una nueva página
+      if (posicionY > doc.page.height - 100) {
+        doc.addPage();
+        posicionY = 50;
+        
+        // Re-dibujar encabezados en la nueva página
+        columnas.forEach((col, index) => {
+          const x = 50 + (index * anchoColumna);
+          doc.rect(x, posicionY, anchoColumna, 20).stroke();
+          doc.text(col.replace(/_/g, ' ').toUpperCase(), x + 2, posicionY + 5, {
+            width: anchoColumna - 4,
+            height: 15,
+            ellipsis: true
+          });
+        });
+        posicionY += 20;
+      }
+      
+      columnas.forEach((col, index) => {
+        const x = 50 + (index * anchoColumna);
+        doc.rect(x, posicionY, anchoColumna, 20).stroke();
+        const valor = fila[col] || '';
+        doc.text(String(valor), x + 2, posicionY + 5, {
+          width: anchoColumna - 4,
+          height: 15,
+          ellipsis: true
+        });
+      });
+      
+      posicionY += 20;
+    });
+    
+    doc.end();
+  });
+} 

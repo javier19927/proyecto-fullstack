@@ -5,6 +5,16 @@
 
 import { Router } from 'express';
 import { ReportesController } from '../controllers/reportesController';
+import {
+  auditConsultarReportes,
+  auditExportarReportes,
+  auditFiltrarReportes,
+  auditGenerarReporteObjetivos,
+  auditGenerarReporteProyectos,
+  auditReporteDinamicoComparativo,
+  auditVisualizarResumenPresupuestario,
+  obtenerEstadisticasAuditoria
+} from '../middleware/auditMiddleware';
 import { verifyToken } from '../middleware/authMiddleware';
 import { verificarPermiso } from '../middleware/permissionMiddleware';
 import { PERMISOS } from '../middleware/rolePermissions';
@@ -15,32 +25,15 @@ const router = Router();
 router.use(verifyToken);
 
 /**
- * @route GET /api/reportes/test
- * @desc Endpoint de prueba para diagnóstico
- * @access Solo autenticación
- */
-router.get('/test', (req, res) => {
-  const usuario = (req as any).usuario;
-  res.json({
-    success: true,
-    message: 'Reportes endpoint funcionando',
-    usuario: {
-      id: usuario.id,
-      email: usuario.email,
-      roles: usuario.roles
-    },
-    timestamp: new Date().toISOString()
-  });
-});
-
-/**
  * @route GET /api/reportes/consultar
  * @desc Consultar reportes disponibles y estadísticas básicas
  * @access Requiere permisos de consulta de reportes
  * @roles Todos los roles habilitados
+ * @audit Registra automáticamente la consulta para trazabilidad
  */
 router.get('/consultar',
   verificarPermiso(PERMISOS.REPORTES.CONSULTAR_REPORTES),
+  auditConsultarReportes,
   ReportesController.consultarReportes
 );
 
@@ -49,9 +42,11 @@ router.get('/consultar',
  * @desc Aplicar filtros a los reportes
  * @access Requiere permisos de filtrado de reportes
  * @roles Todos los roles habilitados
+ * @audit Registra filtros aplicados para trazabilidad
  */
 router.post('/filtrar',
   verificarPermiso(PERMISOS.REPORTES.FILTRAR_REPORTES),
+  auditFiltrarReportes,
   ReportesController.filtrarReportes
 );
 
@@ -60,9 +55,11 @@ router.post('/filtrar',
  * @desc Generar reporte técnico de objetivos estratégicos
  * @access Requiere permisos específicos
  * @roles ADMIN, PLANIF, AUDITOR
+ * @audit Registra generación de reporte para trazabilidad
  */
 router.get('/objetivos',
   verificarPermiso(PERMISOS.REPORTES.GENERAR_REPORTE_OBJETIVOS),
+  auditGenerarReporteObjetivos,
   ReportesController.generarReporteObjetivos
 );
 
@@ -71,9 +68,11 @@ router.get('/objetivos',
  * @desc Generar reporte técnico de proyectos de inversión
  * @access Requiere permisos específicos
  * @roles ADMIN, PLANIF, AUDITOR
+ * @audit Registra generación de reporte para trazabilidad
  */
 router.get('/proyectos',
   verificarPermiso(PERMISOS.REPORTES.GENERAR_REPORTE_PROYECTOS),
+  auditGenerarReporteProyectos,
   ReportesController.generarReporteProyectos
 );
 
@@ -82,9 +81,11 @@ router.get('/proyectos',
  * @desc Visualizar resumen presupuestario
  * @access Requiere permisos específicos
  * @roles ADMIN, PLANIF, AUDITOR
+ * @audit Registra consulta de presupuesto para trazabilidad
  */
 router.get('/presupuestario',
   verificarPermiso(PERMISOS.REPORTES.VISUALIZAR_RESUMEN_PRESUPUESTARIO),
+  auditVisualizarResumenPresupuestario,
   ReportesController.visualizarResumenPresupuestario
 );
 
@@ -93,9 +94,11 @@ router.get('/presupuestario',
  * @desc Generar reporte dinámico comparativo
  * @access Requiere permisos específicos
  * @roles PLANIF, AUDITOR
+ * @audit Registra generación de reporte comparativo para trazabilidad
  */
 router.get('/comparativo',
   verificarPermiso(PERMISOS.REPORTES.REPORTE_DINAMICO_COMPARATIVO),
+  auditReporteDinamicoComparativo,
   ReportesController.reporteDinamicoComparativo
 );
 
@@ -115,12 +118,25 @@ router.get('/filtros',
  * @desc Exportar reportes en formato especificado
  * @access Requiere permisos específicos según formato
  * @roles ADMIN, PLANIF, VALID, REVISOR, AUDITOR
+ * @audit Registra exportación para trazabilidad completa
  * @body { tipo: 'objetivos'|'proyectos'|'presupuestario'|'comparativo', formato: 'pdf'|'excel'|'csv', filtros: {} }
  */
 router.post('/exportar',
   // Nota: La validación de permisos específicos se hace en el controlador
   // porque depende del formato solicitado
+  auditExportarReportes,
   ReportesController.exportarReportes
+);
+
+/**
+ * @route GET /api/reportes/auditoria/estadisticas
+ * @desc Obtener estadísticas de auditoría del módulo de reportes
+ * @access Solo auditores y administradores
+ * @roles ADMIN, AUDITOR
+ */
+router.get('/auditoria/estadisticas',
+  verificarPermiso(PERMISOS.AUDITORIA.VER_BITACORA),
+  obtenerEstadisticasAuditoria
 );
 
 export default router;
