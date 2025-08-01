@@ -24,9 +24,11 @@ import reportesRoutes from './routes/reportes';
 import rolRoutes from './routes/roles';
 // import rolNewRoutes from './routes/rolesNew'; // Eliminado - consolidado en roles
 import usuarioRoutes from './routes/usuarios';
+import notificacionesRoutes from './routes/notificaciones';
+import revisionesRoutes from './routes/revisiones';
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 4001;
 
 // Middlewares de seguridad
 app.use(helmet());
@@ -81,6 +83,10 @@ app.use('/api/proyectos', proyectosRoutes);
 console.log('✅ Rutas PROYECTOS registradas en /api/proyectos');
 app.use('/api/reportes', reportesRoutes);
 console.log('✅ Rutas REPORTES registradas en /api/reportes');
+app.use('/api/notificaciones', notificacionesRoutes);
+console.log('✅ Rutas NOTIFICACIONES registradas en /api/notificaciones');
+app.use('/api/revisiones', revisionesRoutes);
+console.log('✅ Rutas REVISIONES registradas en /api/revisiones');
 
 // 🏢 Modulo 1: Configuracion Institucional
 app.use('/api/instituciones', institucionRoutes);

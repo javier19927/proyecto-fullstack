@@ -38,7 +38,7 @@ export const validateUserData = (userData: any): User | null => {
     }
 
     // Validar que todos los roles sean strings válidos
-    const validRoles = ['ADMIN', 'PLANIF', 'REVISOR', 'VALID', 'CONSUL'];
+    const validRoles = ['ADMIN', 'PLANIF', 'REVISOR', 'VALID', 'CONSUL', 'AUDITOR'];
     const userRoles = roles.filter(role => 
       typeof role === 'string' && validRoles.includes(role.toUpperCase())
     );

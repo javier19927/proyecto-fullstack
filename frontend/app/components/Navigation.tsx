@@ -4,6 +4,13 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import NotificationSystem from './NotificationSystem';
+import { 
+  hasModuleAccess, 
+  getRoleDescription, 
+  getRoleShortDescription, 
+  getRoleColors 
+} from '../utils/rolePermissions';
 
 interface User {
   id: number;
@@ -59,40 +66,7 @@ export default function Navigation() {
   };
 
   const hasAccess = (module: string) => {
-    if (!user) return false;
-    
-    // Asegurar que roles es un array y normalizar los valores
-    const userRoles = Array.isArray(user.roles) ? user.roles : [];
-    
-    switch (module) {
-      case 'configuracion':
-        // REVISOR y VALID NO deben tener acceso al modulo de configuracion institucional
-        return userRoles.includes('ADMIN') || userRoles.includes('PLANIF');
-      case 'objetivos':
-        // REVISOR NO tiene acceso a objetivos según matriz de permisos
-        // Solo ADMIN, PLANIF y VALID pueden acceder
-        const objetivosAccess = userRoles.includes('ADMIN') || 
-               userRoles.includes('PLANIF') || 
-               userRoles.includes('VALID');
-        return objetivosAccess;
-      case 'proyectos':
-        // REVISOR tiene acceso de validacion a proyectos, VALID NO tiene acceso a proyectos
-        return userRoles.includes('ADMIN') || 
-               userRoles.includes('PLANIF') || 
-               userRoles.includes('REVISOR');
-      case 'reportes':
-        // ADMIN, PLANIF, REVISOR y VALID tienen acceso a reportes según matriz de permisos
-        const reportesAccess = userRoles.includes('ADMIN') || 
-               userRoles.includes('PLANIF') || 
-               userRoles.includes('REVISOR') || 
-               userRoles.includes('VALID');
-        return reportesAccess;
-      case 'usuarios':
-        // Solo ADMIN puede gestionar usuarios
-        return userRoles.includes('ADMIN');
-      default:
-        return false;
-    }
+    return hasModuleAccess(user, module);
   };
 
   return (
@@ -202,16 +176,32 @@ export default function Navigation() {
               {hasAccess('usuarios') && (
                 <Link
                   href="/gestion-usuarios"
-                  className={`inline-flex items-center px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+                  className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
                     isActive('/gestion-usuarios')
-                      ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-200'
-                      : 'text-gray-600 hover:text-indigo-600 hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50'
+                      ? 'nav-pill-active shadow-sm'
+                      : 'nav-pill-inactive'
                   }`}
                 >
                   <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
                   </svg>
                   Usuarios
+                </Link>
+              )}
+
+              {hasAccess('auditoria') && (
+                <Link
+                  href="/auditoria"
+                  className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                    isActive('/auditoria')
+                      ? 'nav-pill-active shadow-sm'
+                      : 'nav-pill-inactive'
+                  }`}
+                >
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Auditoría
                 </Link>
               )}
             </div>
@@ -224,41 +214,29 @@ export default function Navigation() {
               <div className="text-right">
                 <div className="text-sm font-medium text-gray-700">{fixEncoding(user.nombre)}</div>
                 <div className="text-xs text-gray-500 mb-1">
-                  {user.roles.includes('ADMIN') ? 'Administrador del Sistema' 
-                    : user.roles.includes('PLANIF') ? 'Tecnico Planificador' 
-                    : user.roles.includes('REVISOR') ? 'Revisor Institucional'
-                    : user.roles.includes('VALID') ? 'Validador de Proyectos'
-                    : 'Usuario del Sistema'}
+                  {getRoleDescription(user.roles[0] || '')}
                 </div>
                 <div className="flex justify-end space-x-1">
-                  {user.roles.map((role, index) => (
-                    <span
-                      key={index}
-                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                        role === 'ADMIN' 
-                          ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' 
-                          : role === 'PLANIF'
-                          ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                          : role === 'REVISOR'
-                          ? 'bg-purple-100 text-purple-700 border border-purple-200'
-                          : role === 'VALID'
-                          ? 'bg-orange-100 text-orange-700 border border-orange-200'
-                          : 'bg-gray-100 text-gray-700 border border-gray-200'
-                      }`}
-                    >
-                      {role === 'ADMIN' ? 'Admin' 
-                        : role === 'PLANIF' ? 'Tecnico' 
-                        : role === 'REVISOR' ? 'Revisor'
-                        : role === 'VALID' ? 'Validador'
-                        : role}
-                    </span>
-                  ))}
+                  {user.roles.map((role, index) => {
+                    const colors = getRoleColors(role);
+                    return (
+                      <span
+                        key={index}
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${colors.bg} ${colors.text} border ${colors.border}`}
+                      >
+                        {getRoleShortDescription(role)}
+                      </span>
+                    );
+                  })}
                 </div>
               </div>
               <div className="w-10 h-10 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white font-medium text-sm shadow-lg">
                 {fixEncoding(user.nombre) ? fixEncoding(user.nombre).charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase()}
               </div>
             </div>
+
+            {/* Sistema de Notificaciones */}
+            <NotificationSystem className="hidden md:block" />
             
             {/* Boton cerrar sesion - Siempre visible */}
             <button
@@ -378,6 +356,20 @@ export default function Navigation() {
                   👥 Usuarios
                 </Link>
               )}
+
+              {hasAccess('auditoria') && (
+                <Link
+                  href="/auditoria"
+                  className={`block pl-3 pr-4 py-2 text-base font-medium ${
+                    isActive('/auditoria')
+                      ? 'bg-indigo-50 border-indigo-500 text-indigo-700'
+                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                  }`}
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  🕵️ Auditoría
+                </Link>
+              )}
             </div>
 
             {/* Informacion del usuario en movil */}
@@ -386,35 +378,20 @@ export default function Navigation() {
                 <div className="text-base font-medium text-gray-800">{fixEncoding(user.nombre)}</div>
                 <div className="text-sm text-gray-500">{user.email}</div>
                 <div className="text-xs text-gray-500 mb-2">
-                  {user.roles.includes('ADMIN') ? 'Administrador del Sistema' 
-                    : user.roles.includes('PLANIF') ? 'Tecnico Planificador' 
-                    : user.roles.includes('REVISOR') ? 'Revisor Institucional'
-                    : user.roles.includes('VALID') ? 'Validador de Proyectos'
-                    : 'Usuario del Sistema'}
+                  {getRoleDescription(user.roles[0] || '').replace(/👨‍💼|🧑‍💼|🧑‍⚖|🕵/, '').trim()}
                 </div>
                 <div className="flex flex-wrap gap-1">
-                  {user.roles.map((role, index) => (
-                    <span
-                      key={index}
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        role === 'ADMIN' 
-                          ? 'bg-emerald-100 text-emerald-800' 
-                          : role === 'PLANIF'
-                          ? 'bg-blue-100 text-blue-800'
-                          : role === 'REVISOR'
-                          ? 'bg-purple-100 text-purple-800'
-                          : role === 'VALID'
-                          ? 'bg-orange-100 text-orange-800'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}
-                    >
-                      {role === 'ADMIN' ? 'Admin' 
-                        : role === 'PLANIF' ? 'Tecnico' 
-                        : role === 'REVISOR' ? 'Revisor'
-                        : role === 'VALID' ? 'Validador'
-                        : role}
-                    </span>
-                  ))}
+                  {user.roles.map((role, index) => {
+                    const colors = getRoleColors(role);
+                    return (
+                      <span
+                        key={index}
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${colors.bg} ${colors.text.replace('700', '800')}`}
+                      >
+                        {getRoleShortDescription(role).replace(/👨‍💼|🧑‍💼|🧑‍⚖|🕵/, '').trim()}
+                      </span>
+                    );
+                  })}
                 </div>
               </div>
             </div>

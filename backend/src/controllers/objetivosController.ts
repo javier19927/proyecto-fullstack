@@ -100,10 +100,9 @@ export const consultarPND = async (req: Request, res: Response) => {
 export const consultarODS = async (req: Request, res: Response) => {
   try {
     const result = await pool.query(`
-      SELECT id, idODS, numero, nombre, titulo, descripcion, color, estado 
+      SELECT id, idods, numero, objetivo as nombre, descripcion as titulo, descripcion 
       FROM ods 
-      WHERE estado = true 
-      ORDER BY idODS
+      ORDER BY idods
     `);
     
     const response: ApiResponse<any[]> = {
@@ -365,9 +364,8 @@ export const validarObjetivo = async (req: Request, res: Response) => {
 export const getODS = async (req: Request, res: Response) => {
   try {
     const result = await pool.query(`
-      SELECT id, idODS, numero, nombre, titulo, descripcion, color, estado 
+      SELECT id, idods, numero, objetivo as nombre, descripcion as titulo, descripcion 
       FROM ods 
-      WHERE estado = true 
       ORDER BY numero
     `);
     
@@ -433,12 +431,12 @@ export const getObjetivos = async (req: Request, res: Response) => {
     }
 
     const query = `
-      SELECT o.id, o.codigo, o.nombre, o.descripcion, o.tipo, o.nivel,
+      SELECT o.id, o.codigo, o.descripcion as nombre, o.descripcion, o.tipo, o.prioridad,
              o.estado, o.porcentaje_avance, o.fecha_inicio, o.fecha_fin, 
-             o.presupuesto, o.created_at, o.updated_at,
-             op.nombre as objetivo_padre_nombre,
+             o.presupuesto_asignado as presupuesto, o.created_at, o.updated_at,
+             op.descripcion as objetivo_padre_nombre,
              p.nombre as plan_nombre,
-             ods.nombre as ods_nombre, ods.titulo as ods_titulo,
+             ods.objetivo as ods_nombre, ods.descripcion as ods_titulo,
              u.nombre as responsable_nombre,
              COUNT(m.id) as total_metas
       FROM objetivo o
@@ -448,8 +446,8 @@ export const getObjetivos = async (req: Request, res: Response) => {
       LEFT JOIN usuario u ON o.responsable_id = u.id
       LEFT JOIN meta m ON o.id = m.objetivo_id
       WHERE ${whereConditions.join(' AND ')}
-      GROUP BY o.id, op.nombre, p.nombre, ods.nombre, ods.titulo, u.nombre
-      ORDER BY o.nivel, o.created_at
+      GROUP BY o.id, op.descripcion, p.nombre, ods.objetivo, ods.descripcion, u.nombre
+      ORDER BY o.created_at
     `;
     
     const result = await pool.query(query, params);
@@ -475,13 +473,13 @@ export const getObjetivoById = async (req: Request, res: Response) => {
     const { id } = req.params;
     
     const result = await pool.query(`
-      SELECT o.id, o.codigo, o.nombre, o.descripcion, o.tipo, o.nivel,
+      SELECT o.id, o.codigo, o.descripcion as nombre, o.descripcion, o.tipo, o.prioridad,
              o.objetivo_padre_id, o.plan_institucional_id, o.ods_id, o.responsable_id,
              o.estado, o.porcentaje_avance, o.fecha_inicio, o.fecha_fin, 
-             o.presupuesto, o.created_at, o.updated_at,
-             op.nombre as objetivo_padre_nombre,
+             o.presupuesto_asignado as presupuesto, o.created_at, o.updated_at,
+             op.descripcion as objetivo_padre_nombre,
              p.nombre as plan_nombre,
-             ods.nombre as ods_nombre, ods.titulo as ods_titulo, ods.idODS as ods_idODS, ods.numero as ods_numero,
+             ods.objetivo as ods_nombre, ods.descripcion as ods_titulo, ods.idods as ods_idODS, ods.numero as ods_numero,
              u.nombre as responsable_nombre, u.email as responsable_email
       FROM objetivo o
       LEFT JOIN objetivo op ON o.objetivo_padre_id = op.id
@@ -616,11 +614,10 @@ export const createObjetivo = async (req: Request, res: Response) => {
         // Crear un plan institucional por defecto
         console.log('🔍 [DEBUG] Creando plan institucional por defecto...');
         const newPlan = await pool.query(`
-          INSERT INTO plan_institucional (codigo, nombre, descripcion, institucion_id, periodo_inicio, periodo_fin)
-          VALUES ($1, $2, $3, $4, $5, $6)
+          INSERT INTO plan_institucional (nombre, descripcion, institucion_id, periodo_inicio, periodo_fin)
+          VALUES ($1, $2, $3, $4, $5)
           RETURNING id
         `, [
-          'PI-001',
           'Plan Institucional General',
           'Plan institucional creado automaticamente para gestion de objetivos',
           institucionId,
@@ -651,17 +648,25 @@ export const createObjetivo = async (req: Request, res: Response) => {
     });
 
     const result = await pool.query(`
-      INSERT INTO objetivo (codigo, nombre, descripcion, tipo, nivel, area_responsable, prioridad,
+      INSERT INTO objetivo (codigo, descripcion, tipo, prioridad,
                            objetivo_padre_id, plan_institucional_id, pnd_id, ods_id, responsable_id, 
-                           fecha_inicio, fecha_fin, presupuesto)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-      RETURNING id, codigo, nombre, descripcion, tipo, nivel, area_responsable, prioridad,
-                estado, porcentaje_avance, fecha_inicio, fecha_fin, presupuesto, created_at, updated_at
+                           fecha_inicio, fecha_fin, presupuesto_asignado)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      RETURNING id, codigo, descripcion, tipo, prioridad,
+                estado, porcentaje_avance, fecha_inicio, fecha_fin, presupuesto_asignado, created_at, updated_at
     `, [
-      data.codigo, data.nombre, data.descripcion, data.tipo, 
-      data.nivel || 1, data.area_responsable, data.prioridad || 'MEDIA',
-      data.objetivo_padre_id, planInstitucionalId, data.pnd_id, 
-      data.ods_id, data.responsable_id, data.fecha_inicio, data.fecha_fin, data.presupuesto
+      data.codigo, 
+      data.descripcion || data.nombre, // Usar descripcion en lugar de nombre
+      data.tipo, 
+      data.prioridad || 'MEDIA',
+      data.objetivo_padre_id, 
+      planInstitucionalId, 
+      data.pnd_id, 
+      data.ods_id, 
+      data.responsable_id, 
+      data.fecha_inicio, 
+      data.fecha_fin, 
+      data.presupuesto
     ]);
 
     console.log('🔍 [DEBUG] Objetivo creado exitosamente:', result.rows[0]);
@@ -1344,12 +1349,12 @@ export const filtrarObjetivosPorEstado = async (req: Request, res: Response) => 
     }
 
     const query = `
-      SELECT o.id, o.codigo, o.nombre, o.descripcion, o.tipo, o.nivel,
+      SELECT o.id, o.codigo, o.descripcion as nombre, o.descripcion, o.tipo, o.prioridad,
              o.area_responsable, o.prioridad, o.estado, o.porcentaje_avance, 
-             o.fecha_inicio, o.fecha_fin, o.presupuesto, o.created_at, o.updated_at,
+             o.fecha_inicio, o.fecha_fin, o.presupuesto_asignado as presupuesto, o.created_at, o.updated_at,
              o.observaciones,
              pnd.nombre as pnd_nombre, pnd.numero as pnd_numero,
-             ods.nombre as ods_nombre, ods.numero as ods_numero,
+             ods.objetivo as ods_nombre, ods.numero as ods_numero,
              u.nombre as responsable_nombre, u.email as responsable_email,
              COUNT(m.id) as total_metas,
              COUNT(CASE WHEN m.estado = 'COMPLETADA' THEN 1 END) as metas_completadas
@@ -1359,7 +1364,7 @@ export const filtrarObjetivosPorEstado = async (req: Request, res: Response) => 
       LEFT JOIN usuario u ON o.responsable_id = u.id
       LEFT JOIN meta m ON o.id = m.objetivo_id
       WHERE ${whereConditions.join(' AND ')}
-      GROUP BY o.id, pnd.nombre, pnd.numero, ods.nombre, ods.numero, u.nombre, u.email
+      GROUP BY o.id, pnd.nombre, pnd.numero, ods.objetivo, ods.numero, u.nombre, u.email
       ORDER BY o.prioridad DESC, o.created_at DESC
     `;
     

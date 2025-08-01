@@ -4,6 +4,12 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import ErrorHandler from '../components/ErrorHandler';
 import PermissionIndicator from '../components/PermissionIndicator';
+import SendToValidationButton from '../components/SendToValidationButton';
+import ValidationActionButtons from '../components/ValidationActionButtons';
+import PNDODSAlignmentSelector from '../components/PNDODSAlignmentSelector';
+import ValidatorWorkflow from '../components/ValidatorWorkflow';
+import RoleAccessGuard from '../components/RoleAccessGuard';
+import { RoleBasedExportButton } from '../components/ExportPermissions';
 import { useAuth } from '../hooks/useAuth';
 import { useErrorHandler } from '../hooks/useErrorHandler';
 import { buildApiUrl, buildHeaders } from '../utils/apiConfig';
@@ -79,10 +85,25 @@ export default function GestionObjetivosPage() {
   const { user, token, loading: isLoading, permissions } = useAuth()
   const router = useRouter()
 
+  return (
+    <RoleAccessGuard 
+      allowedRoles={['ADMIN', 'PLANIF', 'VALID']}
+      requiredModule="objetivos"
+      blockRestrictedAccess={true}
+    >
+      <GestionObjetivosContent />
+    </RoleAccessGuard>
+  );
+}
+
+function GestionObjetivosContent() {
+  const { user, token, loading: isLoading, permissions } = useAuth()
+  const router = useRouter()
+
   // Estados principales
   const [activeTab, setActiveTab] = useState(() => {
-    // Si es VALIDADOR, empezar en la pestana de validacion
-    return user?.roles?.includes('VALIDADOR') ? 'validacion' : 'objetivos'
+    // Si es Autoridad Validadora (VALID), empezar en la pestana de validacion
+    return user?.roles?.includes('VALID') ? 'validacion' : 'objetivos'
   })
   const [objetivos, setObjetivos] = useState<Objetivo[]>([])
   const [pndList, setPndList] = useState<PND[]>([])
@@ -126,7 +147,8 @@ export default function GestionObjetivosPage() {
     fecha_fin: '',
     presupuesto: '',
     pnd_id: '',
-    ods_id: ''
+    ods_id: '',
+    observaciones: ''
   })
 
   useEffect(() => {
@@ -394,7 +416,8 @@ export default function GestionObjetivosPage() {
       fecha_fin: '',
       presupuesto: '',
       pnd_id: '',
-      ods_id: ''
+      ods_id: '',
+      observaciones: ''
     })
   }
 
@@ -918,12 +941,10 @@ export default function GestionObjetivosPage() {
               Volver al Dashboard
             </button>
           </div>
-        </div>
       </div>
-    )
-  }
-
-  return (
+    </div>
+  )
+}  return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white shadow">
@@ -1180,51 +1201,53 @@ export default function GestionObjetivosPage() {
                             </button>
                           )}
                           
-                          {/* Enviar a validacion - solo para planificadores */}
-                          {objetivo.estado === 'BORRADOR' && canRegisterEdit && !user.roles?.includes('VALIDADOR') && (
-                            <button
-                              onClick={() => enviarAValidacion(objetivo.id)}
-                              className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-sm"
-                            >
-                               Enviar a Validacion
-                            </button>
-                          )}
+                          {/* Enviar a validacion */}
+                          <SendToValidationButton
+                            itemId={objetivo.id}
+                            itemType="objetivo"
+                            currentStatus={objetivo.estado}
+                            onSendToValidation={enviarAValidacion}
+                            userRole={user.roles?.[0] || ''}
+                          />
                           
-                          {/* Botones de validacion - solo para validadores */}
-                          {objetivo.estado === 'EN_VALIDACION' && canValidate && (
-                            <div className="space-y-1">
-                              <button
-                                onClick={() => validarObjetivo(objetivo.id, 'APROBADO')}
-                                className="w-full bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm"
-                              >
-                                ✅ Aprobar Objetivo
-                              </button>
-                              <button
-                                onClick={() => {
-                                  const observaciones = prompt('Observaciones para el rechazo (obligatorio):')
-                                  if (observaciones && observaciones.trim()) {
-                                    validarObjetivo(objetivo.id, 'RECHAZADO', observaciones)
-                                  } else if (observaciones !== null) {
-                                    alert('Las observaciones son obligatorias para rechazar un objetivo.')
-                                  }
-                                }}
-                                className="w-full bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm"
-                              >
-                                ❌ Rechazar Objetivo
-                              </button>
-                              <button
-                                onClick={() => {
-                                  const comentario = prompt('Agregar comentario al objetivo:')
-                                  if (comentario && comentario.trim()) {
-                                    // Funcion para agregar comentarios pendiente
-                                    alert('Comentario agregado: ' + comentario)
-                                  }
-                                }}
-                                className="w-full bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm"
-                              >
-                                💬 Agregar Comentario
-                              </button>
-                            </div>
+                          {/* Botones de validacion */}
+                          <ValidationActionButtons
+                            itemId={objetivo.id}
+                            itemType="objetivo"
+                            currentStatus={objetivo.estado}
+                            onValidate={(id, action, observaciones) => {
+                              const estado = action === 'APROBAR' ? 'APROBADO' : 'RECHAZADO';
+                              return validarObjetivo(id, estado, observaciones);
+                            }}
+                            userRole={user.roles?.[0] || ''}
+                          />
+                          
+                          {/* Editar objetivo - solo para planificadores en borrador */}
+                          {objetivo.estado === 'BORRADOR' && canRegisterEdit && (
+                            <button
+                              onClick={() => {
+                                setObjetivoSeleccionado(objetivo);
+                                // Cargar datos del objetivo al formulario
+                                setFormObjetivo({
+                                  codigo: objetivo.codigo,
+                                  nombre: objetivo.nombre,
+                                  descripcion: objetivo.descripcion,
+                                  tipo: objetivo.tipo,
+                                  area_responsable: objetivo.area_responsable,
+                                  prioridad: objetivo.prioridad,
+                                  fecha_inicio: objetivo.fecha_inicio || '',
+                                  fecha_fin: objetivo.fecha_fin || '',
+                                  presupuesto: objetivo.presupuesto?.toString() || '',
+                                  observaciones: objetivo.observaciones || '',
+                                  pnd_id: '',
+                                  ods_id: ''
+                                });
+                                setShowObjetivoForm(true);
+                              }}
+                              className="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 px-3 py-1 rounded text-sm font-medium"
+                            >
+                               Editar
+                            </button>
                           )}
                         </div>
                       </div>

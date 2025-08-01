@@ -22,6 +22,10 @@ router.use(accesoConfiguracionInstitucional);
 
 // Listar todos los usuarios (requiere permiso VER_USUARIOS)
 router.get('/', puedeVerUsuarios, UsuarioController.listarUsuarios);
+router.get('/all', puedeVerUsuarios, UsuarioController.listarUsuarios);
+
+// Obtener usuarios técnicos para filtros (accesible para validadores y auditores)
+router.get('/tecnicos', puedeVerUsuarios, UsuarioController.obtenerUsuariosTecnicos);
 
 // Obtener usuario por ID (requiere permiso VER_USUARIOS)
 router.get('/:id', puedeVerUsuarios, UsuarioController.obtenerUsuario);

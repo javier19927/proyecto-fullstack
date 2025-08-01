@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getDashboardStats, getMenuByRole } from '../controllers/dashboardController';
+import { getDashboardStats, getRoleSpecificStats, getMenuByRole } from '../controllers/dashboardController';
 import { verifyToken } from '../middleware/authMiddleware';
 
 const router = Router();
@@ -10,6 +10,9 @@ const router = Router();
 
 // GET /api/dashboard/stats - Estadisticas del dashboard
 router.get('/stats', verifyToken, getDashboardStats);
+
+// GET /api/dashboard/role-specific - Dashboard específico por rol 
+router.get('/role-specific', verifyToken, getRoleSpecificStats);
 
 // GET /api/dashboard/menu - Menu basado en roles
 router.get('/menu', verifyToken, getMenuByRole);

@@ -20,9 +20,9 @@ router.use(accesoConfiguracionInstitucional);
 
 // 🏢 RUTAS PARA GESTION DE INSTITUCIONES
 
-// Listar todas las instituciones (requiere permiso VER_INSTITUCIONES)
-router.get('/', puedeVerInstituciones, InstitucionController.listarInstituciones);
-router.get('/all', puedeVerInstituciones, InstitucionController.listarInstituciones);
+// Listar todas las instituciones (requiere solo autenticación para gestión de usuarios)
+router.get('/', InstitucionController.listarInstituciones);
+router.get('/all', InstitucionController.listarInstituciones);
 
 // Obtener jerarquia institucional (requiere permiso VER_INSTITUCIONES)
 router.get('/jerarquia/completa', puedeVerInstituciones, InstitucionController.obtenerJerarquia);

@@ -494,7 +494,40 @@ INSERT INTO usuario (correo, nombreCompleto, rol, password, estado, codigo, inst
 ('validador@test.com', 'Carlos Roberto Lopez Fernandez', 4, '$2b$10$8P9R7ZcKJZ4K8P9R7ZcKJOXr4K8P9R7ZcKJZ4K8P9R7ZcKJZ4K8P9R', true, 'USR004', 3),
 ('consultor@test.com', 'Ana Sofia Mendoza Vargas', 5, '$2b$10$8P9R7ZcKJZ4K8P9R7ZcKJOXr4K8P9R7ZcKJZ4K8P9R7ZcKJZ4K8P9R', true, 'USR005', 4);
 
--- 6.6 Insertar Objetivos Estrategicos de Prueba
+-- 6.6 Insertar Objetivos de Desarrollo Sostenible (ODS) - 17 Objetivos Oficiales
+INSERT INTO ods (idods, numero, objetivo, descripcion, meta, indicador) VALUES
+(1, 1, 'Fin de la pobreza', 'Poner fin a la pobreza en todas sus formas en todo el mundo', 'Erradicar para todas las personas y en todo el mundo la pobreza extrema', 'Proporción de la población que vive por debajo del umbral internacional de pobreza'),
+(2, 2, 'Hambre cero', 'Poner fin al hambre, lograr la seguridad alimentaria y la mejora de la nutrición y promover la agricultura sostenible', 'Poner fin al hambre y asegurar el acceso de todas las personas a una alimentación sana', 'Prevalencia de la subalimentación'),
+(3, 3, 'Salud y bienestar', 'Garantizar una vida sana y promover el bienestar para todos en todas las edades', 'Reducir la tasa mundial de mortalidad materna a menos de 70 por cada 100.000 nacidos vivos', 'Tasa de mortalidad materna'),
+(4, 4, 'Educación de calidad', 'Garantizar una educación inclusiva, equitativa y de calidad y promover oportunidades de aprendizaje durante toda la vida para todos', 'Asegurar que todas las niñas y todos los niños terminen la enseñanza primaria y secundaria', 'Tasa de finalización de la educación primaria y secundaria'),
+(5, 5, 'Igualdad de género', 'Lograr la igualdad entre los géneros y empoderar a todas las mujeres y las niñas', 'Poner fin a todas las formas de discriminación contra todas las mujeres y las niñas', 'Proporción de mujeres y niñas víctimas de violencia física o sexual'),
+(6, 6, 'Agua limpia y saneamiento', 'Garantizar la disponibilidad de agua y su gestión sostenible y el saneamiento para todos', 'Lograr el acceso universal y equitativo al agua potable a un precio asequible para todos', 'Proporción de población que utiliza servicios de agua potable gestionados de forma segura'),
+(7, 7, 'Energía asequible y no contaminante', 'Garantizar el acceso a una energía asequible, segura, sostenible y moderna para todos', 'Garantizar el acceso universal a servicios energéticos asequibles, fiables y modernos', 'Proporción de población con acceso a electricidad'),
+(8, 8, 'Trabajo decente y crecimiento económico', 'Promover el crecimiento económico sostenido, inclusivo y sostenible, el empleo pleno y productivo y el trabajo decente para todos', 'Mantener el crecimiento económico per cápita de conformidad con las circunstancias nacionales', 'Tasa de crecimiento anual del PIB real per cápita'),
+(9, 9, 'Industria, innovación e infraestructura', 'Construir infraestructuras resilientes, promover la industrialización inclusiva y sostenible y fomentar la innovación', 'Desarrollar infraestructuras fiables, sostenibles, resilientes y de calidad', 'Proporción de población rural que vive a menos de 2 km de una carretera transitable todo el año'),
+(10, 10, 'Reducción de las desigualdades', 'Reducir la desigualdad en y entre los países', 'Lograr progresivamente y mantener el crecimiento de los ingresos del 40% más pobre de la población', 'Tasas de crecimiento de los gastos o ingresos per cápita del 40% más pobre de la población'),
+(11, 11, 'Ciudades y comunidades sostenibles', 'Lograr que las ciudades y los asentamientos humanos sean inclusivos, seguros, resilientes y sostenibles', 'Asegurar el acceso de todas las personas a viviendas y servicios básicos adecuados, seguros y asequibles', 'Proporción de población urbana que vive en barrios marginales, asentamientos informales o viviendas inadecuadas'),
+(12, 12, 'Producción y consumo responsables', 'Garantizar modalidades de consumo y producción sostenibles', 'Aplicar el Marco Decenal de Programas sobre modalidades de consumo y producción sostenibles', 'Número de países que desarrollan e implementan herramientas de política para apoyar el cambio hacia modalidades sostenibles de consumo y producción'),
+(13, 13, 'Acción por el clima', 'Adoptar medidas urgentes para combatir el cambio climático y sus efectos', 'Fortalecer la resiliencia y la capacidad de adaptación a los riesgos relacionados con el clima', 'Número de países que han comunicado el establecimiento o la puesta en funcionamiento de una política/estrategia/plan integrado'),
+(14, 14, 'Vida submarina', 'Conservar y utilizar en forma sostenible los océanos, los mares y los recursos marinos para el desarrollo sostenible', 'Prevenir y reducir significativamente la contaminación marina de todo tipo', 'Índice de eutrofización costera y densidad de desechos plásticos flotantes'),
+(15, 15, 'Vida de ecosistemas terrestres', 'Proteger, restablecer y promover el uso sostenible de los ecosistemas terrestres, gestionar los bosques de forma sostenible, luchar contra la desertificación, detener e invertir la degradación de las tierras y poner freno a la pérdida de la diversidad biológica', 'Asegurar la conservación, el restablecimiento y el uso sostenible de los ecosistemas terrestres y los ecosistemas interiores de agua dulce', 'Superficie forestal como proporción de la superficie total'),
+(16, 16, 'Paz, justicia e instituciones sólidas', 'Promover sociedades pacíficas e inclusivas para el desarrollo sostenible, facilitar el acceso a la justicia para todos y crear instituciones eficaces, responsables e inclusivas a todos los niveles', 'Reducir significativamente todas las formas de violencia y las correspondientes tasas de mortalidad en todo el mundo', 'Número de víctimas de homicidios intencionales por cada 100.000 habitantes'),
+(17, 17, 'Alianzas para lograr los objetivos', 'Fortalecer los medios de ejecución y revitalizar la Alianza Mundial para el Desarrollo Sostenible', 'Fortalecer la movilización de recursos internos, incluso mediante la prestación de apoyo internacional a los países en desarrollo', 'Total de ingresos del gobierno como proporción del PIB, por fuente');
+
+-- 6.7 Insertar Plan Nacional de Desarrollo (PND) - Objetivos Nacionales de Bolivia
+INSERT INTO pnd (idpnd, pilar, meta, resultado, accion, indicador) VALUES
+(1, 'Erradicación de la pobreza en todas sus formas y dimensiones', 'Garantizar el derecho a la salud integral y a la nutrición', 'Mejorar las condiciones de salud y nutrición de la población boliviana', 'Fortalecer el sistema público de salud y ampliar la cobertura sanitaria', 'Tasa de mortalidad infantil, desnutrición crónica infantil'),
+(2, 'Erradicación de la pobreza en todas sus formas y dimensiones', 'Garantizar el acceso equitativo a educación de calidad', 'Incrementar los niveles educativos y la calidad de la educación', 'Ampliar la cobertura educativa y mejorar la infraestructura educativa', 'Tasa de analfabetismo, años promedio de escolaridad'),
+(3, 'Erradicación de la pobreza en todas sus formas y dimensiones', 'Asegurar condiciones de hábitat y vida digna', 'Mejorar las condiciones habitacionales y de servicios básicos', 'Ampliar la cobertura de servicios básicos y vivienda social', 'Déficit habitacional, cobertura de agua potable y saneamiento'),
+(4, 'Erradicación de la pobreza en todas sus formas y dimensiones', 'Reducir las desigualdades y erradicar la pobreza', 'Disminuir los niveles de pobreza y desigualdad social', 'Implementar políticas de redistribución y protección social', 'Índice de pobreza multidimensional, coeficiente de Gini'),
+(5, 'Desarrollo económico productivo y competitivo', 'Impulsar una economía sostenible, productiva y competitiva', 'Diversificar la matriz productiva y aumentar la competitividad', 'Promover la industrialización y el desarrollo tecnológico', 'PIB per cápita, índice de competitividad global'),
+(6, 'Desarrollo económico productivo y competitivo', 'Promover trabajo digno y empleo adecuado para todas las personas', 'Generar empleos de calidad y reducir la informalidad laboral', 'Fortalecer las políticas de empleo y capacitación laboral', 'Tasa de desempleo, tasa de informalidad laboral'),
+(7, 'Fortalecimiento de la gestión ambiental', 'Asegurar una gestión sostenible de los recursos naturales y del ambiente', 'Conservar los recursos naturales y proteger el medio ambiente', 'Implementar políticas de conservación y gestión ambiental sostenible', 'Superficie de áreas protegidas, emisiones de gases de efecto invernadero'),
+(8, 'Profundización de la democracia participativa', 'Fortalecer la seguridad ciudadana y la convivencia pacífica', 'Reducir los índices de violencia y criminalidad', 'Mejorar los sistemas de seguridad y justicia', 'Tasa de homicidios, percepción de seguridad ciudadana'),
+(9, 'Profundización de la democracia participativa', 'Consolidar el Estado democrático, transparente y eficiente', 'Mejorar la gestión pública y la transparencia institucional', 'Fortalecer las instituciones democráticas y la participación ciudadana', 'Índice de percepción de corrupción, índice de transparencia gubernamental'),
+(10, 'Profundización de la democracia participativa', 'Promover una justicia independiente, accesible y oportuna', 'Mejorar el acceso y la calidad de la justicia', 'Modernizar el sistema judicial y ampliar el acceso a la justicia', 'Tiempo promedio de resolución de casos, satisfacción con el sistema judicial');
+
+-- 6.8 Insertar Objetivos Estrategicos de Prueba
 INSERT INTO objetivo (codigo, descripcion, estado, responsable_id, fecha_inicio, fecha_fin) VALUES
 ('OBJ001', 'Mejorar la infraestructura educativa del pais mediante la construccion y equipamiento de centros educativos modernos', 'APROBADO', 2, '2025-01-01', '2026-12-31'),
 ('OBJ002', 'Desarrollar proyectos de tecnologia para la modernizacion del estado y mejora de servicios ciudadanos', 'APROBADO', 2, '2025-02-01', '2025-12-31'),
@@ -990,8 +1023,14 @@ BEGIN
     RAISE NOTICE '   • Objetivos validados: %', (SELECT COUNT(*) FROM objetivo WHERE validado_por IS NOT NULL);
     RAISE NOTICE '   • Total proyectos: %', (SELECT COUNT(*) FROM proyecto);
     RAISE NOTICE '   • Proyectos validados: %', (SELECT COUNT(*) FROM proyecto WHERE validado_por IS NOT NULL);
+    RAISE NOTICE '   🌍 Total ODS cargados: %', (SELECT COUNT(*) FROM ods);
+    RAISE NOTICE '   �️ Total PND cargados: %', (SELECT COUNT(*) FROM pnd);
     RAISE NOTICE '';
-    RAISE NOTICE '🎯 MODULO DE REPORTES COMPLETAMENTE CONFIGURADO';
+    RAISE NOTICE '✅ DATOS DE ALINEACIÓN DISPONIBLES:';
+    RAISE NOTICE '   • 17 Objetivos de Desarrollo Sostenible (ODS) oficiales';
+    RAISE NOTICE '   • 10 Objetivos Nacionales del Plan Nacional de Desarrollo (PND) de Bolivia';
+    RAISE NOTICE '';
+    RAISE NOTICE '�🎯 MODULO DE REPORTES Y ALINEACIÓN PND-ODS COMPLETAMENTE CONFIGURADO';
     RAISE NOTICE '================================================================';
     RAISE NOTICE '';
 END $;

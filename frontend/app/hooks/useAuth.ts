@@ -15,30 +15,39 @@ export interface User {
 const PERMISOS_MODULOS = {
   // MODULO 1: Configuracion Institucional
   CONFIGURACION_INSTITUCIONAL: {
-    REGISTRAR_EDITAR: ['ADMIN'] as string[], // Solo Administrador ✓
-    VALIDAR: [] as string[], // ❌ Administrador NO puede validar segun matriz actualizada
-    CONSULTAR: ['ADMIN', 'PLANIF'] as string[] // Administrador ✓ y Tecnico ✓ segun matriz actualizada
+    REGISTRAR_EDITAR: ['ADMIN'] as string[], // ✅ Solo Administrador del Sistema puede registrar, editar instituciones, usuarios y roles
+    VALIDAR: [] as string[], // ❌ No aplica validacion en este modulo
+    CONSULTAR: ['ADMIN', 'PLANIF'] as string[] // ✅ Administrador completo, Tecnico Planificador (consulta limitada)
   },
   
   // MODULO 2: Gestion de Objetivos Estrategicos  
   GESTION_OBJETIVOS: {
-    REGISTRAR_EDITAR: ['ADMIN', 'PLANIF'] as string[], // Administrador ✓ y Tecnico ✓
-    VALIDAR: ['VALID'] as string[], // Autoridad Validadora ✓ - Solo valida objetivos
-    CONSULTAR: ['ADMIN', 'PLANIF', 'VALID', 'CONSUL'] as string[] // REVISOR removido - sin acceso segun matriz
+    REGISTRAR_EDITAR: ['ADMIN', 'PLANIF'] as string[], // ✅ Administrador del Sistema y Tecnico Planificador
+    VALIDAR: ['VALID'] as string[], // ✅ Solo Autoridad Validadora puede aprobar/rechazar objetivos
+    CONSULTAR: ['ADMIN', 'PLANIF', 'VALID', 'AUDITOR', 'CONSUL'] as string[] // ✅ Todos excepto Revisor Institucional (sin acceso a objetivos)
   },
   
   // MODULO 3: Proyectos de Inversion
   PROYECTOS_INVERSION: {
-    REGISTRAR_EDITAR: ['ADMIN', 'PLANIF'] as string[], // Administrador ✓ y Tecnico ✓
-    VALIDAR: ['REVISOR'] as string[], // Solo Revisor ✓ (corregido - Admin NO puede ❌)
-    CONSULTAR: ['ADMIN', 'PLANIF', 'REVISOR', 'CONSUL'] as string[] // Todos los roles que pueden consultar
+    REGISTRAR_EDITAR: ['ADMIN', 'PLANIF'] as string[], // ✅ Administrador del Sistema y Tecnico Planificador
+    VALIDAR: ['REVISOR'] as string[], // ✅ Solo Revisor Institucional puede aprobar/rechazar proyectos
+    CONSULTAR: ['ADMIN', 'PLANIF', 'REVISOR', 'AUDITOR'] as string[] // ✅ Todos excepto Autoridad Validadora (sin acceso a proyectos)
   },
   
   // MODULO 4: Reportes
   REPORTES: {
-    REGISTRAR_EDITAR: [] as string[], // No aplica para reportes
-    VALIDAR: [] as string[], // No aplica para reportes
-    CONSULTAR: ['ADMIN', 'PLANIF', 'REVISOR', 'VALID'] as string[] // Administrador ✓, Planificador ✓, Revisor ✓ y Validador ✓ segun matriz
+    REGISTRAR_EDITAR: [] as string[], // ❌ No aplica para reportes
+    VALIDAR: [] as string[], // ❌ No aplica para reportes
+    CONSULTAR: ['ADMIN', 'PLANIF', 'REVISOR', 'VALID', 'AUDITOR'] as string[], // ✅ Todos los roles tienen acceso a reportes
+    EXPORTAR_COMPLETO: ['ADMIN', 'PLANIF', 'AUDITOR'] as string[], // ✅ Exportacion completa
+    EXPORTAR_LIMITADO: ['REVISOR', 'VALID'] as string[] // ✅ Exportacion limitada
+  },
+  
+  // MODULO 5: Auditoria y Trazabilidad
+  AUDITORIA: {
+    REGISTRAR_EDITAR: [] as string[], // ❌ No aplica
+    VALIDAR: [] as string[], // ❌ No aplica
+    CONSULTAR: ['AUDITOR'] as string[] // ✅ Solo Auditor tiene acceso completo a auditoria y trazabilidad
   }
 } as const;
 
@@ -66,8 +75,22 @@ export const useAuth = () => {
             
             // Validación básica del usuario
             if (parsedUser && parsedUser.id && parsedUser.email && parsedUser.roles) {
+              // Aplicar mapeo de roles también al cargar desde localStorage
+              const roleMapping: { [key: string]: string } = {
+                'VALIDADOR': 'VALID'
+              };
+
+              const mappedRoles = parsedUser.roles.map((role: string) => 
+                roleMapping[role] || role
+              );
+
+              const userWithMappedRoles = {
+                ...parsedUser,
+                roles: mappedRoles
+              };
+
               setToken(storedToken);
-              setUser(parsedUser);
+              setUser(userWithMappedRoles);
             } else {
               // Datos inválidos
               localStorage.removeItem('token');
@@ -138,10 +161,25 @@ export const useAuth = () => {
   };
 
   const setUserData = (userData: User, userToken: string) => {
-    setUser(userData);
+    // Mapear roles del sistema para consistencia
+    const roleMapping: Record<string, string> = {
+      'VALIDADOR': 'VALID',
+      'AUDITOR': 'AUDITOR',
+      'ADMIN': 'ADMIN',
+      'PLANIF': 'PLANIF',
+      'REVISOR': 'REVISOR',
+      'CONSUL': 'CONSUL'
+    };
+
+    const mappedUserData = {
+      ...userData,
+      roles: userData.roles?.map(role => roleMapping[role] || role) || []
+    };
+
+    setUser(mappedUserData);
     setToken(userToken);
     localStorage.setItem('token', userToken);
-    localStorage.setItem('user', JSON.stringify(userData));
+    localStorage.setItem('user', JSON.stringify(mappedUserData));
   };
 
   const hasRole = (role: string): boolean => {
@@ -171,7 +209,7 @@ export const useAuth = () => {
     return user.roles.some(role => allowedRoles.includes(role));
   };
 
-  // Funciones especificas por modulo
+  // Funciones especificas por modulo con permisos granulares
   const permissions = {
     configuracionInstitucional: {
       canRegisterEdit: () => canRegisterEdit('CONFIGURACION_INSTITUCIONAL'),
@@ -180,18 +218,25 @@ export const useAuth = () => {
     },
     gestionObjetivos: {
       canRegisterEdit: () => canRegisterEdit('GESTION_OBJETIVOS'),
-      canValidate: () => canValidate('GESTION_OBJETIVOS'),
+      canValidate: () => canValidate('GESTION_OBJETIVOS'), // Solo VALID (Autoridad Validadora)
       canConsult: () => canConsult('GESTION_OBJETIVOS')
     },
     proyectosInversion: {
       canRegisterEdit: () => canRegisterEdit('PROYECTOS_INVERSION'),
-      canValidate: () => canValidate('PROYECTOS_INVERSION'),
+      canValidate: () => canValidate('PROYECTOS_INVERSION'), // Solo REVISOR (Revisor Institucional)
       canConsult: () => canConsult('PROYECTOS_INVERSION')
     },
     reportes: {
       canRegisterEdit: () => canRegisterEdit('REPORTES'),
       canValidate: () => canValidate('REPORTES'),
-      canConsult: () => canConsult('REPORTES')
+      canConsult: () => canConsult('REPORTES'),
+      canExportComplete: () => user?.roles?.some(role => ['ADMIN', 'PLANIF', 'AUDITOR'].includes(role)) || false, // Exportacion completa
+      canExportLimited: () => user?.roles?.some(role => ['REVISOR', 'VALID'].includes(role)) || false // Exportacion limitada
+    },
+    auditoria: {
+      canRegisterEdit: () => canRegisterEdit('AUDITORIA'),
+      canValidate: () => canValidate('AUDITORIA'),
+      canConsult: () => canConsult('AUDITORIA') // Solo AUDITOR
     }
   };
 

@@ -149,8 +149,8 @@ export class Institucion {
 
       // Registrar en auditoria
       await pool.query(`
-        INSERT INTO auditoria (accion, tabla, registro_id, usuario_id, fecha_accion, datos_nuevos)
-        VALUES ('ACTIVAR', 'institucion', $1, $2, NOW(), $3)
+        INSERT INTO auditoria (accion, tabla_afectada, registro_id, usuario_id, valores_nuevos, created_at)
+        VALUES ('ACTIVAR', 'institucion', $1, $2, $3, NOW())
       `, [this.id, usuarioId, JSON.stringify(result.rows[0])]);
 
       return this;
@@ -188,8 +188,8 @@ export class Institucion {
 
       // Registrar en auditoria
       await pool.query(`
-        INSERT INTO auditoria (accion, tabla, registro_id, usuario_id, fecha_accion, datos_nuevos)
-        VALUES ('INACTIVAR', 'institucion', $1, $2, NOW(), $3)
+        INSERT INTO auditoria (accion, tabla_afectada, registro_id, usuario_id, valores_nuevos, created_at)
+        VALUES ('INACTIVAR', 'institucion', $1, $2, $3, NOW())
       `, [this.id, usuarioId, JSON.stringify(result.rows[0])]);
 
       return this;

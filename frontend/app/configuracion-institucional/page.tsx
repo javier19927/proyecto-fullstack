@@ -50,6 +50,7 @@ export default function ConfiguracionInstitucionalPage() {
     }
 
     if (user && !canConsult) {
+      router.push('/dashboard');
       return;
     }
 
@@ -90,8 +91,16 @@ export default function ConfiguracionInstitucionalPage() {
   };
 
   const toggleEstado = async (id: number, estadoActual: boolean) => {
+    const action = estadoActual ? 'inactivar' : 'activar';
+    const mensaje = estadoActual 
+      ? '¿Estás seguro de que quieres INACTIVAR esta institución? Esta acción cambiará su estado a inactivo.' 
+      : '¿Estás seguro de que quieres ACTIVAR esta institución?';
+    
+    if (!confirm(mensaje)) {
+      return;
+    }
+
     try {
-      const action = estadoActual ? 'inactivar' : 'activar';
       const response = await fetch(buildApiUrl(`/api/instituciones/${id}/${action}`), {
         method: 'PATCH',
         headers: {
@@ -102,14 +111,20 @@ export default function ConfiguracionInstitucionalPage() {
           usuario_id: user?.id
         })
       });
-
+      
       if (response.ok) {
+        const data = await response.json();
+        alert(`✅ Institución ${action}da exitosamente`);
         loadInstituciones();
       } else {
-        handleError('Error al cambiar estado');
+        const errorData = await response.text();
+        console.error('❌ Error en respuesta:', errorData);
+        alert(`❌ Error al ${action} institución: ${response.status}`);
+        handleError(`Error al cambiar estado: ${response.status}`);
       }
     } catch (err) {
-      console.error('Error:', err);
+      console.error('❌ Error de conexión:', err);
+      alert(`❌ Error de conexión al ${action} institución`);
       handleError('Error de conexion');
     }
   };

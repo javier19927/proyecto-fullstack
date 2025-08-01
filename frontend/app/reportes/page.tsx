@@ -121,7 +121,16 @@ interface OpcionesFiltros {
 
 export default function ReportesPage() {
   const { user } = useAuth();
-  const [tipoReporte, setTipoReporte] = useState<'objetivos' | 'proyectos' | 'presupuestario' | 'comparativo'>('objetivos');
+  
+  // Configurar tipo de reporte inicial según el rol
+  const getInitialReportType = () => {
+    if (!user?.roles) return 'objetivos';
+    if (user.roles.includes('REVISOR')) return 'proyectos'; // Solo proyectos
+    if (user.roles.includes('VALID')) return 'objetivos'; // Solo objetivos
+    return 'objetivos'; // Por defecto
+  };
+
+  const [tipoReporte, setTipoReporte] = useState<'objetivos' | 'proyectos' | 'presupuestario' | 'comparativo'>(() => getInitialReportType());
   const [datos, setDatos] = useState<ObjetivoEstrategico[] | ProyectoInversion[] | ReporteComparativo[]>([]);
   const [estadisticas, setEstadisticas] = useState<EstadisticasReporte | null>(null);
   const [opcionesFiltros, setOpcionesFiltros] = useState<OpcionesFiltros | null>(null);
@@ -129,6 +138,18 @@ export default function ReportesPage() {
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detalleModal, setDetalleModal] = useState<{ visible: boolean; datos: any }>({ visible: false, datos: null });
+
+  // Función para verificar si un tipo de reporte está permitido para el usuario
+  const isReportTypeAllowed = (type: string) => {
+    if (user?.roles?.includes('REVISOR')) {
+      return type === 'proyectos'; // Solo reportes de proyectos
+    }
+    if (user?.roles?.includes('VALID')) {
+      return type === 'objetivos'; // Solo reportes de objetivos
+    }
+    // ADMIN, PLANIF, AUDITOR tienen acceso a todos los reportes
+    return true;
+  };
 
   // Cargar estadísticas y opciones de filtros al montar el componente
   useEffect(() => {
@@ -246,6 +267,22 @@ export default function ReportesPage() {
         return;
       }
 
+      // Verificar limitaciones de exportación por rol
+      const isLimitedExport = user?.roles?.includes('REVISOR') || user?.roles?.includes('VALID');
+      if (isLimitedExport) {
+        // REVISOR: Solo puede exportar reportes de proyectos
+        if (user?.roles?.includes('REVISOR') && tipoReporte !== 'proyectos') {
+          alert('Los Revisores Institucionales solo pueden exportar reportes de proyectos de inversión.');
+          return;
+        }
+        
+        // VALID: Solo puede exportar reportes de objetivos
+        if (user?.roles?.includes('VALID') && tipoReporte !== 'objetivos') {
+          alert('Las Autoridades Validadoras solo pueden exportar reportes de objetivos estratégicos.');
+          return;
+        }
+      }
+
       console.log('Token encontrado, enviando petición...');
       
       const response = await fetch(`${API_CONFIG.BASE_URL}/api/reportes/exportar`, {
@@ -257,7 +294,8 @@ export default function ReportesPage() {
         body: JSON.stringify({
           tipo: tipoReporte,
           formato,
-          filtros
+          filtros,
+          exportacion_limitada: isLimitedExport
         })
       });
 
@@ -564,13 +602,14 @@ export default function ReportesPage() {
                 )}
                 
                 {/* 📊 3. Resumen Presupuestario */}
-                <button
-                  onClick={() => setTipoReporte('presupuestario')}
-                  className={`p-4 rounded-lg font-medium transition-all border-2 text-left ${
-                    tipoReporte === 'presupuestario'
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-gray-50 text-gray-700 hover:bg-blue-50 border-gray-200 hover:border-blue-300'
-                  }`}
+                {isReportTypeAllowed('presupuestario') && (
+                  <button
+                    onClick={() => setTipoReporte('presupuestario')}
+                    className={`p-4 rounded-lg font-medium transition-all border-2 text-left ${
+                      tipoReporte === 'presupuestario'
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-gray-50 text-gray-700 hover:bg-blue-50 border-gray-200 hover:border-blue-300'
+                    }`}
                 >
                   <div className="text-lg mb-2">Resumen Presupuestario</div>
                   <div className="text-sm opacity-90">
@@ -579,17 +618,19 @@ export default function ReportesPage() {
                     • Estado de ejecución<br/>
                     • Análisis por institución
                   </div>
-                </button>
+                  </button>
+                )}
                 
                 {/* 📊 4. Reportes comparativo */}
-                <button
-                  onClick={() => setTipoReporte('comparativo')}
-                  className={`p-4 rounded-lg font-medium transition-all border-2 text-left ${
-                    tipoReporte === 'comparativo'
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-gray-50 text-gray-700 hover:bg-blue-50 border-gray-200 hover:border-blue-300'
-                  }`}
-                >
+                {isReportTypeAllowed('comparativo') && (
+                  <button
+                    onClick={() => setTipoReporte('comparativo')}
+                    className={`p-4 rounded-lg font-medium transition-all border-2 text-left ${
+                      tipoReporte === 'comparativo'
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-gray-50 text-gray-700 hover:bg-blue-50 border-gray-200 hover:border-blue-300'
+                    }`}
+                  >
                   <div className="text-lg mb-2">📈 Reportes comparativo</div>
                   <div className="text-sm opacity-90">
                     • Metas planificadas vs ejecutadas<br/>
@@ -597,7 +638,8 @@ export default function ReportesPage() {
                     • Cumplimiento por institución<br/>
                     • Análisis de rendimiento
                   </div>
-                </button>
+                  </button>
+                )}
               </div>
             </div>
           </div>

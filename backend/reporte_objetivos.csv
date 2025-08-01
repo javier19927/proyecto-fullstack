@@ -1,9 +1,0 @@
-id,codigo,descripcion,estado,tipo,fecha_registro,institucion_nombre,usuario_creador
-8,OBJ010,Maquinas operarias en UIO,ACTIVO,OPERATIVO,Tue Jul 22 2025 15:46:58 GMT-0500 (hora de Ecuador),Institucion Principal,Juan Carlos Perez Lopez
-7,OBJ 005,esto una prueba,ACTIVO,OPERATIVO,Mon Jul 21 2025 19:53:18 GMT-0500 (hora de Ecuador),Institucion Principal,undefined (Editado)
-6,obj 004,desarrollar e implementar un plan de acceso a tics en sectores marginales,ACTIVO,ESTRATEGICO,Mon Jul 21 2025 09:49:15 GMT-0500 (hora de Ecuador),Institucion Principal,undefined (Editado)
-5,TEST-001,Objetivo creado para pruebas,ACTIVO,ESTRATEGICO,Mon Jul 21 2025 09:20:05 GMT-0500 (hora de Ecuador),Institucion Principal, 
-3,OBJ001,Objetivo estratÃ©gico para mejorar la calidad educativa en la institucion,ACTIVO,ESTRATEGICO,Sat Jul 19 2025 18:30:11 GMT-0500 (hora de Ecuador),Institucion Principal,Tecnico Planificador
-4,OBJ002,Modernizar y fortalecer la infraestructura tecnologica institucional,ACTIVO,ESTRATEGICO,Sat Jul 19 2025 18:30:11 GMT-0500 (hora de Ecuador),Institucion Principal,Tecnico Planificador
-2,OBJ002,Modernizar y fortalecer la infraestructura tecnologica institucional,ACTIVO,ESTRATEGICO,Sat Jul 19 2025 18:19:39 GMT-0500 (hora de Ecuador),Institucion Principal,Tecnico Planificador
-1,OBJ001,Objetivo estratÃ©gico para mejorar la calidad educativa en la institucion,ACTIVO,ESTRATEGICO,Sat Jul 19 2025 18:19:39 GMT-0500 (hora de Ecuador),Institucion Principal,Tecnico Planificador

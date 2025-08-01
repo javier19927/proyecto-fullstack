@@ -37,3 +37,10 @@ Thumbs.db
 # Ignorar coverage reports
 coverage/
 .nyc_output/
+
+# Ignorar archivos de reportes generados
+*.csv
+*.pdf
+*.xlsx
+reporte_*.json
+login_response.json

@@ -10,6 +10,211 @@ import { ApiResponse, CreateProyectoDTO, ProyectoFilter } from '../models';
 // METODOS ESPECIFICOS SEGUN ESPECIFICACIONES
 // ============================================
 
+// Método: getProyectosConActividades() - Obtiene proyectos con sus actividades POA e inversión
+export const getProyectosConActividades = async (req: Request, res: Response) => {
+  try {
+    console.log('🔍 [PROYECTOS] Obteniendo proyectos con actividades POA e inversión');
+    
+    const { tipo, estado, incluirActividades } = req.query;
+    
+    let whereClause = '';
+    const params: any[] = [];
+    
+    if (tipo) {
+      whereClause += ` AND p.tipo = $${params.length + 1}`;
+      params.push(tipo);
+    }
+    
+    if (estado) {
+      whereClause += ` AND p.estado = $${params.length + 1}`;
+      params.push(estado);
+    }
+
+    // Consulta principal de proyectos
+    const proyectosQuery = `
+      SELECT 
+        p.id, p.codigo, p.nombre, p.descripcion, p.tipo, p.estado,
+        p.fecha_inicio, p.fecha_fin, p.duracion_meses,
+        p.presupuesto_total, p.presupuesto_ejecutado, p.avance_fisico,
+        p.avance_financiero, p.porcentaje_avance, p.prioridad,
+        p.ubicacion_geografica, p.beneficiarios_directos, p.beneficiarios_indirectos,
+        p.observaciones, p.created_at, p.updated_at,
+        -- Información de relaciones
+        i.nombre as institucion_nombre,
+        u.nombre as responsable_nombre,
+        us.nombre as supervisor_nombre,
+        o.descripcion as objetivo_descripcion,
+        -- Contadores
+        (SELECT COUNT(*) FROM actividad a WHERE a.proyecto_id = p.id AND a.tipo = 'POA') as actividades_poa,
+        (SELECT COUNT(*) FROM actividad a WHERE a.proyecto_id = p.id AND a.tipo = 'INVERSION') as actividades_inversion,
+        (SELECT COUNT(*) FROM presupuesto pr WHERE pr.proyecto_id = p.id) as presupuestos_count,
+        -- Totales de presupuesto por tipo de actividad
+        (SELECT COALESCE(SUM(a.presupuesto), 0) FROM actividad a WHERE a.proyecto_id = p.id AND a.tipo = 'POA') as presupuesto_poa,
+        (SELECT COALESCE(SUM(a.presupuesto), 0) FROM actividad a WHERE a.proyecto_id = p.id AND a.tipo = 'INVERSION') as presupuesto_inversion
+      FROM proyecto p
+      LEFT JOIN institucion i ON p.institucion_id = i.id
+      LEFT JOIN usuario u ON p.responsable_id = u.id
+      LEFT JOIN usuario us ON p.supervisor_id = us.id
+      LEFT JOIN objetivo o ON p.objetivo_id = o.id
+      WHERE 1=1 ${whereClause}
+      ORDER BY p.created_at DESC
+    `;
+    
+    const proyectosResult = await pool.query(proyectosQuery, params);
+    const proyectos = proyectosResult.rows;
+
+    // Si se solicitan las actividades, obtenerlas para cada proyecto
+    if (incluirActividades === 'true') {
+      for (let proyecto of proyectos) {
+        // Obtener actividades del proyecto
+        const actividadesQuery = `
+          SELECT 
+            a.id, a.codigo, a.nombre, a.descripcion, a.tipo,
+            a.fecha_inicio, a.fecha_fin, a.presupuesto, a.presupuesto_ejecutado,
+            a.porcentaje_avance, a.estado, a.prioridad, a.responsable,
+            a.created_at, a.updated_at,
+            -- Información adicional
+            CASE 
+              WHEN a.tipo = 'POA' THEN '📋 Actividad POA'
+              WHEN a.tipo = 'INVERSION' THEN '💰 Actividad de Inversión'
+              ELSE '📌 Actividad General'
+            END as tipo_descripcion
+          FROM actividad a
+          WHERE a.proyecto_id = $1
+          ORDER BY a.tipo DESC, a.fecha_inicio ASC
+        `;
+        
+        const actividadesResult = await pool.query(actividadesQuery, [proyecto.id]);
+        proyecto.actividades = actividadesResult.rows;
+
+        // Obtener presupuestos del proyecto
+        const presupuestosQuery = `
+          SELECT 
+            pr.id, pr.idpresupuesto, pr.descripcion, pr.monto, pr.tipo,
+            pr.estado, pr.fecha_asignacion, pr.created_at
+          FROM presupuesto pr
+          WHERE pr.proyecto_id = $1
+          ORDER BY pr.created_at DESC
+        `;
+        
+        const presupuestosResult = await pool.query(presupuestosQuery, [proyecto.id]);
+        proyecto.presupuestos = presupuestosResult.rows;
+
+        // Calcular estadísticas del proyecto
+        proyecto.estadisticas = {
+          total_actividades: proyecto.actividades.length,
+          actividades_poa: proyecto.actividades.filter((a: any) => a.tipo === 'POA').length,
+          actividades_inversion: proyecto.actividades.filter((a: any) => a.tipo === 'INVERSION').length,
+          presupuesto_total_actividades: proyecto.actividades.reduce((sum: number, a: any) => sum + (parseFloat(a.presupuesto) || 0), 0),
+          avance_promedio: proyecto.actividades.length > 0 
+            ? proyecto.actividades.reduce((sum: number, a: any) => sum + (parseFloat(a.porcentaje_avance) || 0), 0) / proyecto.actividades.length 
+            : 0
+        };
+      }
+    }
+
+    const response: ApiResponse<any[]> = {
+      success: true,
+      data: proyectos,
+      message: `✅ ${proyectos.length} proyectos obtenidos con información detallada`
+    };
+
+    res.json(response);
+  } catch (error: any) {
+    console.error('❌ Error en getProyectosConActividades:', error);
+    const response: ApiResponse<null> = {
+      success: false,
+      error: `Error obteniendo proyectos con actividades: ${error.message}`
+    };
+    res.status(500).json(response);
+  }
+};
+
+// Método: getEstadisticasProyectos() - Obtiene estadísticas de proyectos POA e inversión
+export const getEstadisticasProyectos = async (req: Request, res: Response) => {
+  try {
+    console.log('📊 [PROYECTOS] Obteniendo estadísticas de proyectos');
+
+    // Estadísticas generales de proyectos
+    const estadisticasGenerales = await pool.query(`
+      SELECT 
+        COUNT(*) as total_proyectos,
+        COUNT(CASE WHEN estado = 'Borrador' THEN 1 END) as proyectos_borrador,
+        COUNT(CASE WHEN estado = 'Enviado' THEN 1 END) as proyectos_enviados,
+        COUNT(CASE WHEN estado = 'Aprobado' THEN 1 END) as proyectos_aprobados,
+        COUNT(CASE WHEN estado = 'EJECUCION' THEN 1 END) as proyectos_ejecucion,
+        COUNT(CASE WHEN estado = 'FINALIZADO' THEN 1 END) as proyectos_finalizados,
+        COALESCE(SUM(presupuesto_total), 0) as presupuesto_total_general,
+        COALESCE(SUM(presupuesto_ejecutado), 0) as presupuesto_ejecutado_general,
+        COALESCE(AVG(porcentaje_avance), 0) as avance_promedio_general
+      FROM proyecto
+      WHERE estado != 'ELIMINADO'
+    `);
+
+    // Estadísticas por tipo de actividad
+    const estadisticasActividades = await pool.query(`
+      SELECT 
+        a.tipo,
+        COUNT(*) as cantidad_actividades,
+        COALESCE(SUM(a.presupuesto), 0) as presupuesto_total,
+        COALESCE(SUM(a.presupuesto_ejecutado), 0) as presupuesto_ejecutado,
+        COALESCE(AVG(a.porcentaje_avance), 0) as avance_promedio,
+        COUNT(CASE WHEN a.estado = 'PLANIFICADA' THEN 1 END) as planificadas,
+        COUNT(CASE WHEN a.estado = 'EN_EJECUCION' THEN 1 END) as en_ejecucion,
+        COUNT(CASE WHEN a.estado = 'COMPLETADA' THEN 1 END) as completadas
+      FROM actividad a
+      JOIN proyecto p ON a.proyecto_id = p.id
+      WHERE p.estado != 'ELIMINADO'
+      GROUP BY a.tipo
+    `);
+
+    // Estadísticas por institución
+    const estadisticasPorInstitucion = await pool.query(`
+      SELECT 
+        i.nombre as institucion,
+        COUNT(p.id) as proyectos_count,
+        COALESCE(SUM(p.presupuesto_total), 0) as presupuesto_total,
+        COALESCE(AVG(p.porcentaje_avance), 0) as avance_promedio
+      FROM institucion i
+      LEFT JOIN proyecto p ON i.id = p.institucion_id AND p.estado != 'ELIMINADO'
+      GROUP BY i.id, i.nombre
+      ORDER BY proyectos_count DESC
+    `);
+
+    // Top 5 proyectos por presupuesto
+    const top5Proyectos = await pool.query(`
+      SELECT 
+        p.codigo, p.nombre, p.presupuesto_total, p.estado,
+        p.porcentaje_avance, i.nombre as institucion
+      FROM proyecto p
+      LEFT JOIN institucion i ON p.institucion_id = i.id
+      WHERE p.estado != 'ELIMINADO'
+      ORDER BY p.presupuesto_total DESC
+      LIMIT 5
+    `);
+
+    const response: ApiResponse<any> = {
+      success: true,
+      data: {
+        generales: estadisticasGenerales.rows[0],
+        por_tipo_actividad: estadisticasActividades.rows,
+        por_institucion: estadisticasPorInstitucion.rows,
+        top_proyectos: top5Proyectos.rows
+      },
+      message: '✅ Estadísticas de proyectos obtenidas exitosamente'
+    };
+
+    res.json(response);
+  } catch (error: any) {
+    console.error('❌ Error en getEstadisticasProyectos:', error);
+    const response: ApiResponse<null> = {
+      success: false,
+      error: `Error obteniendo estadísticas: ${error.message}`
+    };
+    res.status(500).json(response);
+  }
+};
+
 // Metodo: crearProyecto() (alias de createProyecto)
 // Se definira al final del archivo
 
@@ -82,23 +287,21 @@ export const registrarActividad = async (req: Request, res: Response) => {
       tipo, 
       actividad_padre_id, 
       responsable_id,
-      codigo,
-      nombre
+      responsable
     } = req.body;
 
     // Mapear campos del frontend al esquema real de la base de datos
-    const actividadCodigo = codigo || idActividad || `ACT-${proyectoId}-${Date.now()}`;
-    const actividadNombre = nombre || nombreActividad;
+    const actividadCodigo = idActividad || `ACT-${proyectoId}-${Date.now()}`;
+    const actividadNombre = nombreActividad;
     
     console.log('🔹 Registrando actividad:', {
       proyectoId,
       codigo: actividadCodigo,
       nombre: actividadNombre,
-      idactividad: idActividad,
-      nombreactividad: nombreActividad,
-      fechaprogramada: fechaProgramada,
+      fechaProgramada,
       descripcion,
       tipo,
+      responsable,
       actividad_padre_id,
       responsable_id
     });
@@ -107,7 +310,15 @@ export const registrarActividad = async (req: Request, res: Response) => {
     if (!actividadCodigo || !actividadNombre) {
       const response: ApiResponse<null> = {
         success: false,
-        error: 'Faltan campos requeridos: codigo, nombre'
+        error: 'Faltan campos requeridos: código y nombre de actividad'
+      };
+      return res.status(400).json(response);
+    }
+
+    if (!fechaProgramada) {
+      const response: ApiResponse<null> = {
+        success: false,
+        error: 'La fecha programada es obligatoria'
       };
       return res.status(400).json(response);
     }
@@ -116,23 +327,22 @@ export const registrarActividad = async (req: Request, res: Response) => {
     // Usar los campos que realmente existen en la base de datos
     const result = await pool.query(`
       INSERT INTO actividad (
-        codigo, nombre, idactividad, nombreactividad, fechaprogramada, 
-        descripcion, tipo, estado, proyecto_id, actividad_padre_id, responsable_id
+        codigo, nombre, descripcion, fecha_inicio, fecha_fin, 
+        tipo, estado, proyecto_id, actividad_padre_id, responsable_id, responsable
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, 'PLANIFICADA', $8, $9, $10)
-      RETURNING id, codigo, nombre, idactividad, nombreactividad, fechaprogramada, 
-                descripcion, tipo, estado, created_at
+      VALUES ($1, $2, $3, $4, $4, $5, 'PLANIFICADA', $6, $7, $8, $9)
+      RETURNING id, codigo, nombre, descripcion, fecha_inicio, fecha_fin,
+                tipo, estado, responsable, created_at
     `, [
       actividadCodigo, 
       actividadNombre, 
-      idActividad || actividadCodigo,
-      nombreActividad || actividadNombre,
-      fechaProgramada, 
-      descripcion, 
+      descripcion || '',
+      fechaProgramada, // Usamos la misma fecha para inicio y fin inicialmente
       tipo || 'PRINCIPAL', 
       proyectoId, 
       actividad_padre_id || null, 
-      responsable_id || null
+      responsable_id || null,
+      responsable || null
     ]);
 
     const response: ApiResponse<any> = {
@@ -291,7 +501,7 @@ export const getProyectos = async (req: Request, res: Response) => {
              p.presupuesto_ejecutado, p.porcentaje_avance, p.prioridad,
              p.ubicacion_geografica, p.beneficiarios_directos, p.beneficiarios_indirectos,
              p.created_at, p.updated_at,
-             o.nombre as objetivo_nombre,
+             o.descripcion as objetivo_nombre,
              r.nombre as responsable_nombre,
              s.nombre as supervisor_nombre,
              i.nombre as institucion_nombre,
@@ -303,7 +513,7 @@ export const getProyectos = async (req: Request, res: Response) => {
       LEFT JOIN institucion i ON p.institucion_id = i.id
       LEFT JOIN actividad a ON p.id = a.proyecto_id
       WHERE ${whereConditions.join(' AND ')}
-      GROUP BY p.id, o.nombre, r.nombre, s.nombre, i.nombre
+      GROUP BY p.id, o.descripcion, r.nombre, s.nombre, i.nombre
       ORDER BY p.created_at DESC
     `;
     
@@ -336,7 +546,7 @@ export const getProyectoById = async (req: Request, res: Response) => {
              p.ubicacion_geografica, p.beneficiarios_directos, p.beneficiarios_indirectos,
              p.objetivo_id, p.responsable_id, p.supervisor_id, p.institucion_id,
              p.created_at, p.updated_at,
-             o.nombre as objetivo_nombre, o.codigo as objetivo_codigo,
+             o.descripcion as objetivo_nombre, o.codigo as objetivo_codigo,
              r.nombre as responsable_nombre, r.email as responsable_email,
              s.nombre as supervisor_nombre, s.email as supervisor_email,
              i.nombre as institucion_nombre, i.codigo as institucion_codigo
@@ -562,9 +772,9 @@ export const getActividadesByProyecto = async (req: Request, res: Response) => {
     console.log('🔹 Obteniendo actividades del proyecto:', proyectoId);
     
     const result = await pool.query(`
-      SELECT a.id, a.codigo, a.nombre, a.idactividad, a.nombreactividad, 
-             a.descripcion, a.tipo, a.estado, a.fechaprogramada,
-             a.fecha_inicio_planificada, a.fecha_fin_planificada,
+      SELECT a.id, a.codigo, a.nombre, a.descripcion, a.tipo, a.estado,
+             a.fecha_inicio, a.fecha_fin, a.fecha_inicio_planificada, a.fecha_fin_planificada,
+             a.fecha_inicio_real, a.fecha_fin_real, a.responsable,
              a.porcentaje_avance, a.presupuesto, a.presupuesto_ejecutado, 
              a.created_at, a.updated_at,
              r.nombre as responsable_nombre,
@@ -1217,7 +1427,7 @@ export const consultarProyectosPorEstado = async (req: Request, res: Response) =
              p.fecha_inicio as "fechaInicio", p.fecha_fin as "fechaFin",
              COALESCE(p.monto, p.presupuesto_total) as monto,
              p.porcentaje_avance, p.prioridad, p.created_at, p.updated_at,
-             o.nombre as objetivo_nombre,
+             o.descripcion as objetivo_nombre,
              r.nombre as responsable_nombre,
              s.nombre as supervisor_nombre,
              i.nombre as institucion_nombre,
@@ -1285,7 +1495,7 @@ export const monitorearProyectos = async (req: Request, res: Response) => {
         COALESCE(p.monto, p.presupuesto_total) as monto,
         p.porcentaje_avance, p.prioridad, p.observaciones,
         p.created_at, p.updated_at,
-        o.nombre as objetivo_nombre,
+        o.descripcion as objetivo_nombre,
         r.nombre as responsable_nombre,
         i.nombre as institucion_nombre,
         ps.actividades_count,

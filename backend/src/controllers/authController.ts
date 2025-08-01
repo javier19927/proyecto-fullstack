@@ -105,11 +105,25 @@ export const login = async (req: Request, res: Response) => {
       return res.status(401).json(response);
     }
 
+    // Mapear roles del sistema para consistencia frontend
+    const roleMapping: Record<string, string> = {
+      'VALIDADOR': 'VALID',
+      'AUDITOR': 'AUDITOR',
+      'ADMIN': 'ADMIN',
+      'PLANIF': 'PLANIF',
+      'REVISOR': 'REVISOR',
+      'CONSUL': 'CONSUL'
+    };
+
+    const mappedRoles = (user.roles || []).map((role: string) => 
+      roleMapping[role] || role
+    );
+
     // Generar JWT token
     const tokenPayload = {
       userId: user.id,
       email: user.email,
-      roles: user.roles || [],
+      roles: mappedRoles,
       institucion_id: user.institucion_id
     };
 
@@ -131,7 +145,7 @@ export const login = async (req: Request, res: Response) => {
         id: user.id,
         nombre: user.nombre,
         email: user.email,
-        roles: user.roles || []
+        roles: mappedRoles
       },
       token,
       expiresIn: '8h'
@@ -196,6 +210,20 @@ export const getProfile = async (req: AuthenticatedRequest, res: Response) => {
 
     const profile = profileResult.rows[0];
 
+    // Mapear roles del sistema para consistencia frontend
+    const roleMapping: Record<string, string> = {
+      'VALIDADOR': 'VALID',
+      'AUDITOR': 'AUDITOR',
+      'ADMIN': 'ADMIN',
+      'PLANIF': 'PLANIF',
+      'REVISOR': 'REVISOR',
+      'CONSUL': 'CONSUL'
+    };
+
+    const mappedRoles = (profile.roles || []).map((role: string) => 
+      roleMapping[role] || role
+    );
+
     const response: ApiResponse<any> = {
       success: true,
       data: {
@@ -207,7 +235,7 @@ export const getProfile = async (req: AuthenticatedRequest, res: Response) => {
         institucion: profile.institucion_nombre,
         ultimoAcceso: profile.ultimo_acceso,
         fechaRegistro: profile.created_at,
-        roles: profile.roles || [],
+        roles: mappedRoles,
         rolesNombres: profile.roles_nombres || [],
         permisos: profile.permisos || []
       }

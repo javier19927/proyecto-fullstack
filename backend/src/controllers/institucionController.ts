@@ -40,8 +40,8 @@ export class InstitucionController {
       
       // Registrar en auditoria
       await pool.query(`
-        INSERT INTO auditoria (accion, tabla, registro_id, usuario_id, fecha_accion, datos_nuevos)
-        VALUES ('INSERT', 'institucion', $1, $2, NOW(), $3)
+        INSERT INTO auditoria (accion, tabla_afectada, registro_id, usuario_id, valores_nuevos, created_at)
+        VALUES ('INSERT', 'institucion', $1, $2, $3, NOW())
       `, [institucioGuardada.id, institucioGuardada.responsable || null, JSON.stringify(institucioGuardada)]);
 
       res.status(201).json({
@@ -159,8 +159,8 @@ export class InstitucionController {
 
       // Registrar en auditoria
       await pool.query(`
-        INSERT INTO auditoria (accion, tabla, registro_id, usuario_id, fecha_accion, datos_anteriores, datos_nuevos)
-        VALUES ('UPDATE', 'institucion', $1, $2, NOW(), $3, $4)
+        INSERT INTO auditoria (accion, tabla_afectada, registro_id, usuario_id, valores_anteriores, valores_nuevos, created_at)
+        VALUES ('UPDATE', 'institucion', $1, $2, $3, $4, NOW())
       `, [id, responsable || datosAnteriores.responsable, JSON.stringify(datosAnteriores), JSON.stringify(result.rows[0])]);
 
       res.json({
@@ -237,7 +237,7 @@ export class InstitucionController {
         data: institucionInactivada
       });
     } catch (error) {
-      console.error('Error al inactivar institucion:', error);
+      console.error('❌ Error al inactivar institucion:', error);
       res.status(500).json({
         success: false,
         message: '❌ Error al inactivar la institucion',

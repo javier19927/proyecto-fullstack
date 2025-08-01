@@ -10,38 +10,48 @@ export class UsuarioController {
         SELECT 
           u.id,
           u.codigo,
-          u.nombre,
-          u.apellido,
-          CONCAT(u.nombre, ' ', u.apellido) as nombreCompleto,
-          u.email as correo,
+          CONCAT(u.nombre, ' ', u.apellido) as nombre,
+          u.email,
           u.telefono,
           u.documento,
           u.cargo,
           u.institucion_id,
           u.estado,
-          u.ultimo_acceso,
+          u.ultimo_acceso as last_login,
           u.created_at,
           u.updated_at,
-          i.nombre as institucion_nombre,
-          r.id as rol_id,
-          r.nombre as rol_nombre,
-          r.descripcion as rol_descripcion,
-          r.nivel as rol_nivel
+          i.nombre as institucion_nombre
         FROM usuario u
         LEFT JOIN institucion i ON u.institucion_id = i.id
-        LEFT JOIN usuario_rol ur ON u.id = ur.usuario_id AND ur.estado = true
-        LEFT JOIN rol r ON ur.rol_id = r.id
         WHERE u.estado = true
         ORDER BY u.nombre, u.apellido
       `;
 
-      const result = await pool.query(query);
+      const usuarios = await pool.query(query);
+
+      // Obtener roles para cada usuario
+      const usuariosConRoles = await Promise.all(
+        usuarios.rows.map(async (usuario) => {
+          const rolesQuery = `
+            SELECT r.id, r.nombre, r.descripcion
+            FROM rol r
+            INNER JOIN usuario_rol ur ON r.id = ur.rol_id
+            WHERE ur.usuario_id = $1 AND ur.estado = true
+          `;
+          const rolesResult = await pool.query(rolesQuery, [usuario.id]);
+          
+          return {
+            ...usuario,
+            roles: rolesResult.rows.map(rol => rol.id) // Solo los IDs de los roles
+          };
+        })
+      );
 
       res.json({
         success: true,
         message: '📋 Lista de usuarios obtenida correctamente',
-        data: result.rows,
-        total: result.rows.length
+        data: usuariosConRoles,
+        total: usuariosConRoles.length
       });
     } catch (error) {
       console.error('Error al listar usuarios:', error);
@@ -214,10 +224,24 @@ export class UsuarioController {
       telefono,
       documento,
       cargo,
-      institucion_id
+      institucion_id,
+      password
     } = req.body;
 
     try {
+      console.log('🔍 Iniciando modificacion de usuario:', {
+        id,
+        correo,
+        nombreCompleto,
+        rol,
+        codigo,
+        apellido,
+        telefono,
+        documento,
+        cargo,
+        institucion_id,
+        tienePassword: !!password
+      });
       // Obtener datos anteriores para auditoria
       const anteriorResult = await pool.query('SELECT * FROM usuario WHERE id = $1', [id]);
       
@@ -270,33 +294,68 @@ export class UsuarioController {
         apellidoFinal = apellido || nombreParts.slice(1).join(' ') || '';
       }
 
-      const query = `
-        UPDATE usuario SET 
-          codigo = $1,
-          nombre = $2, 
-          apellido = $3, 
-          email = $4, 
-          telefono = $5, 
-          documento = $6,
-          cargo = $7,
-          institucion_id = $8,
-          updated_at = NOW()
-        WHERE id = $9
-        RETURNING id, codigo, nombre, apellido, email, telefono, documento, cargo, 
-                 institucion_id, estado, created_at, updated_at
-      `;
+      // Construir consulta SQL dinámicamente dependiendo si se actualiza password
+      let query, values;
       
-      const values = [
-        codigo || datosAnteriores.codigo,
-        nombre,
-        apellidoFinal,
-        correo || datosAnteriores.email,
-        telefono !== undefined ? telefono : datosAnteriores.telefono,
-        documento !== undefined ? documento : datosAnteriores.documento,
-        cargo !== undefined ? cargo : datosAnteriores.cargo,
-        institucion_id !== undefined ? institucion_id : datosAnteriores.institucion_id,
-        id
-      ];
+      if (password) {
+        query = `
+          UPDATE usuario SET 
+            codigo = $1,
+            nombre = $2, 
+            apellido = $3, 
+            email = $4, 
+            telefono = $5, 
+            documento = $6,
+            cargo = $7,
+            institucion_id = $8,
+            password = crypt($9, gen_salt('bf')),
+            updated_at = NOW()
+          WHERE id = $10
+          RETURNING id, codigo, nombre, apellido, email, telefono, documento, cargo, 
+                   institucion_id, estado, created_at, updated_at
+        `;
+        
+        values = [
+          codigo || datosAnteriores.codigo,
+          nombre,
+          apellidoFinal,
+          correo || datosAnteriores.email,
+          telefono !== undefined ? telefono : datosAnteriores.telefono,
+          documento !== undefined ? documento : datosAnteriores.documento,
+          cargo !== undefined ? cargo : datosAnteriores.cargo,
+          institucion_id !== undefined ? institucion_id : datosAnteriores.institucion_id,
+          password,
+          id
+        ];
+      } else {
+        query = `
+          UPDATE usuario SET 
+            codigo = $1,
+            nombre = $2, 
+            apellido = $3, 
+            email = $4, 
+            telefono = $5, 
+            documento = $6,
+            cargo = $7,
+            institucion_id = $8,
+            updated_at = NOW()
+          WHERE id = $9
+          RETURNING id, codigo, nombre, apellido, email, telefono, documento, cargo, 
+                   institucion_id, estado, created_at, updated_at
+        `;
+        
+        values = [
+          codigo || datosAnteriores.codigo,
+          nombre,
+          apellidoFinal,
+          correo || datosAnteriores.email,
+          telefono !== undefined ? telefono : datosAnteriores.telefono,
+          documento !== undefined ? documento : datosAnteriores.documento,
+          cargo !== undefined ? cargo : datosAnteriores.cargo,
+          institucion_id !== undefined ? institucion_id : datosAnteriores.institucion_id,
+          id
+        ];
+      }
 
       const result = await pool.query(query, values);
       const usuario = result.rows[0];
@@ -624,6 +683,42 @@ export class UsuarioController {
       res.status(500).json({
         success: false,
         message: '❌ Error al obtener el usuario',
+        error: error instanceof Error ? error.message : 'Error desconocido'
+      });
+    }
+  }
+
+  // Obtener usuarios técnicos (PLANIF) para filtros
+  static async obtenerUsuariosTecnicos(req: Request, res: Response) {
+    try {
+      const query = `
+        SELECT DISTINCT
+          u.id,
+          CONCAT(u.nombre, ' ', u.apellido) as nombre,
+          u.email,
+          i.nombre as institucion_nombre
+        FROM usuario u
+        LEFT JOIN institucion i ON u.institucion_id = i.id
+        INNER JOIN usuario_rol ur ON u.id = ur.usuario_id
+        INNER JOIN rol r ON ur.rol_id = r.id
+        WHERE u.estado = true 
+          AND ur.estado = true
+          AND r.nombre = 'PLANIF'
+        ORDER BY u.nombre, u.apellido
+      `;
+
+      const result = await pool.query(query);
+
+      res.json({
+        success: true,
+        message: '✅ Usuarios técnicos obtenidos exitosamente',
+        data: result.rows
+      });
+    } catch (error) {
+      console.error('Error al obtener usuarios técnicos:', error);
+      res.status(500).json({
+        success: false,
+        message: '❌ Error al obtener usuarios técnicos',
         error: error instanceof Error ? error.message : 'Error desconocido'
       });
     }
